@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Extension Settings</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        input[type="file"] {
+            display: block;
+            margin-bottom: 20px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        button:hover:not(:disabled) {
+            background-color: #45a049;
+        }
+
+        #currentSound {
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: #333;
+        }
+
+        #disableButton {
+            background-color: #f44336;
+        }
+
+        #disableButton:hover:not(:disabled) {
+            background-color: #d7352b;
+        }
+    </style>
+</head>
+<body>
+    <h1>Extension Settings</h1>
+
+    <p id="currentSound">Current Sound: Default</p>
+
+    <label for="soundPicker">Choose a sound file (MP3):</label>
+    <input type="file" id="soundPicker" accept="audio/mp3">
+
+    <button id="saveSettings" disabled>Save and Close</button>
+    <button id="disableButton">Disable Extension</button>
+
+    <script src="options.js"></script>
+</body>
+</html>
