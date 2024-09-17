@@ -589,9 +589,11 @@ chrome.runtime.onMessage.addListener((request) => {
     } else if (request.message === "toggleExtensionState") {
         if (request.state) {
             // If the extension is activated, start observing
+			console.log("The extension is activated, start observing");
             MutationObserverManager.startObserving();
         } else {
             // If the extension is deactivated, stop observing
+			console.log("The extension is de-activated, stop observing");
             MutationObserverManager.stopObserving();
         }
     }
@@ -651,7 +653,7 @@ const MutationObserverManager = (() => {
 		});
 		
     patientCardObserver.observe(patientCardNode, { childList: true, subtree: true });
-	activeObservers.push(patientCardObserver); // Track this observer
+    activeObservers.push(patientCardObserver); // Track this observer
 };
 
     // Function to locate the time slots header row based on the deep hierarchy
