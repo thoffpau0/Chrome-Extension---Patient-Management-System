@@ -116,3 +116,7 @@ If you wish to contribute, fork the repository and create a pull request with yo
 ## Contact
 
 For any issues or support, please open an issue on GitHub or contact the repository owner.
+
+## License
+
+This project is licensed under the Apache License 2.0. See the [LICENSE](./LICENSE) file for more information.
