@@ -586,8 +586,14 @@ chrome.runtime.onMessage.addListener((request) => {
 	resetTimeSlots();
 	resetCachedPatientList();
 	console.log("All patient data has been cleared.");
-    } else if (request.message === "stopObserving") {
-        MutationObserverManager.stopObserving();
+    } else if (request.message === "toggleExtensionState") {
+        if (request.state) {
+            // If the extension is activated, start observing
+            MutationObserverManager.startObserving();
+        } else {
+            // If the extension is deactivated, stop observing
+            MutationObserverManager.stopObserving();
+        }
     }
 });
 
