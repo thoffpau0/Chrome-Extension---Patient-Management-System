@@ -580,13 +580,15 @@ chrome.runtime.onMessage.addListener((request) => {
     } else if (request.message === "updatePatientData") {
         updatePatientDataToMatchScreen();
     } else if (request.message === "outputPatientLists") {
-		PatientManager.logAllPatientData();
-	} else if (request.message === "clearPatientData") {
-		PatientManager.clearAllPatientData();
-		resetTimeSlots();
-		resetCachedPatientList();
-		console.log("All patient data has been cleared.");
-	}
+	PatientManager.logAllPatientData();
+    } else if (request.message === "clearPatientData") {
+	PatientManager.clearAllPatientData();
+	resetTimeSlots();
+	resetCachedPatientList();
+	console.log("All patient data has been cleared.");
+    } else if (request.message === "stopObserving") {
+        MutationObserverManager.stopObserving();
+    }
 });
 
 const MutationObserverManager = (() => {
