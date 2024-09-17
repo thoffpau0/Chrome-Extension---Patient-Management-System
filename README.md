@@ -41,50 +41,74 @@ A custom Chrome extension designed to monitor real-time updates to patient data 
 
 ## Usage
 
-- The extension will start monitoring the page as soon as it is loaded. 
-- It checks for patient cards and time slot header changes.
-- When a diagnostic number exceeds its previous value, an audio chime will play to alert the user.
-
-## Development
-
-1. **Make changes to the source code using any text editor like Notepad++.**
-
-2. **Use Git for Version Control:**
-   - To check the status of your changes:
-     ```bash
-     git status
-     ```
-   - To add and commit your changes:
-     ```bash
-     git add .
-     git commit -m "Your commit message"
-     ```
-   - To push the changes to GitHub:
-     ```bash
-     git push origin master
-     ```
-
-## Publishing to Chrome Web Store
-
-1. **Prepare for Chrome Web Store:**
-   - Navigate to the project directory.
-   - Zip the contents of the directory (excluding `node_modules` if present).
+   How to Use the Extension
+      This guide walks through how to install, configure, and use the Chrome extension for monitoring patient data updates, including managing audio alerts and configuration options.
    
-2. **Publish in the Chrome Web Store:**
-   - Create a developer account on [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole).
-   - Upload the zipped file, fill in the details, and submit it for approval.
-   - You can also set the extension to "Unlisted" for private sharing.
+   Requirements
+   
+      Supported Browsers: Chrome (Other Chromium-based browsers may also work, but Chrome is recommended).
+      Audio Files: You can select an audio chime for alerts. The extension only supports .mp3 format for the audio files.
+      
+   Features
+   
+      Monitoring Patient Data: The extension tracks changes in the patient list and time slots, displaying real-time updates. Alerts are generated when certain conditions are met, such as diagnostic changes.
+      Customizable Audio Alerts: You can customize the sound played when a diagnostic alert is triggered.
+      Persistent Patient Data Management: Patient data is stored and updated in the background with options to clear or export this data at any time.
+      
+   Icon States
+   
+      Idle/Gray: The extension is installed but not actively monitoring anything. No data is being tracked, and no alerts will trigger.
+      Active/Green: The extension is actively monitoring patient list data. Any changes to time slots or diagnostics will be tracked and potentially trigger alerts.
+      Error/Red: There has been an issue, such as the Patient List not being detected or an error when loading audio alerts. The extension is unable to monitor correctly and may require attention.
+      Debug Mode/Blue: If the extension is running in debug mode, you’ll see additional logs in the Chrome Developer Tools Console. This mode is for troubleshooting and diagnostics.
+      
+   Options Available
+   
+   1. Audio Alert Configuration
+         Select a Chime: The extension allows you to select an .mp3 file to use as the chime for alerts. By default, it uses an included sound file, but you can upload your own audio file.
+         Supported format: .mp3 only
+      
+         Ensure your file is under 1 MB for optimal performance.
+      
+         How to upload:
+            Go to the extension settings.
+            Click on "Choose Chime".
+            Select the .mp3 file from your local directory.
+      
+   2. Debug Mode
+         Toggle this option to enable/disable debug mode. When debug mode is active, the console will output detailed logs about patient data changes, mutations in the DOM, and diagnostic checks.
+         This can help when troubleshooting or during development to ensure the extension is working as expected.
+         It also outputs errors, warnings, and detailed steps for each mutation observed in the patient list.
+      
+   4. Reset Patient Data
+         This option allows you to clear all stored patient data.
+         It will reset diagnostics counts and clear any cached information about time slots or patient data.
+         *Warning*: This action is irreversible once executed.
 
-## License Options
-
-You can choose from the following licenses based on how you want to distribute the project:
-
-1. **MIT License**: A permissive license that allows anyone to use, modify, and distribute the code, with attribution to you.
-2. **GNU GPL v3**: Requires that any modified versions of your code are also open-source and distributed under the same license.
-3. **Apache License 2.0**: Similar to MIT but provides explicit patent rights protection for contributors.
-
-Feel free to select the license that aligns best with your goals for this project.
-
+   Usage Instructions
+   
+      Install the Extension: 
+         Follow the instructions in the "Installation" section.
+         
+      Monitor Patients:
+         Open your web application where the patient list is displayed.
+         The extension will automatically detect the "Patient List" and start monitoring for changes.
+         You will see the icon change to green when the extension is actively tracking.
+         
+      Configure Chime (Optional):
+         Go to the extension options.
+         Upload your own .mp3 sound file if you prefer a custom sound for alerts.
+         
+      Check Alerts:
+         Alerts are triggered when diagnostics numbers are updated in real-time.
+         The extension will play the selected sound if a diagnostic alert condition is met (e.g., a diagnostic number increases).
+         
+      Troubleshooting:
+         If the icon turns red, open the Chrome Developer Console (Ctrl + Shift + I or Cmd + Option + I on Mac) and check for error logs under the "Console" tab.
+         Use debug mode to output more verbose logs about the extension’s internal state.
+   Limitations
+      The extension only supports patient lists that use a structured DOM with consistent data-testid attributes for detecting patient cards and time slots.
+      Currently, only .mp3 files are supported for chime sounds. Other formats (like .wav or .ogg) will not work.
 ## Contributing
 
 If you wish to contribute, fork the repository and create a pull request with your changes. Make sure to document any modifications thoroughly.
