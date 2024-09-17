@@ -590,10 +590,12 @@ chrome.runtime.onMessage.addListener((request) => {
 });
 
 const MutationObserverManager = (() => {
+	let activeObservers = []; // Track all active observers
+	
     // Function to create an observer for time slots header row
     const createTimeSlotObserver = (timeSlotHeadersNode) => {
-    console.log("Creating Time Slot Observer"); // Confirm observer creation
-    const timeSlotObserver = new MutationObserver((mutations) => {
+        console.log("Creating Time Slot Observer");
+        const timeSlotObserver = new MutationObserver((mutations) => {
         mutations.forEach((mutation) => {
             console.log("Time slot mutation detected:", mutation);
 
@@ -613,8 +615,9 @@ const MutationObserverManager = (() => {
         });
     });
 
-    timeSlotObserver.observe(timeSlotHeadersNode, { childList: true, subtree: true });
-};
+	    timeSlotObserver.observe(timeSlotHeadersNode, { childList: true, subtree: true });
+	    activeObservers.push(timeSlotObserver); // Track this observer
+    };
 
     // Function to create an observer for a patient card
     const createPatientCardObserver = (patientCardNode) => {
@@ -640,6 +643,7 @@ const MutationObserverManager = (() => {
 		});
 		
     patientCardObserver.observe(patientCardNode, { childList: true, subtree: true });
+	activeObservers.push(patientCardObserver); // Track this observer
 };
 
     // Function to locate the time slots header row based on the deep hierarchy
@@ -708,8 +712,19 @@ const MutationObserverManager = (() => {
         }
     };
 
-    return { startObserving: waitForPatientList };
+     // Stop all observers
+    const stopObserving = () => {
+        activeObservers.forEach(observer => observer.disconnect());
+        activeObservers = []; // Clear the observers list
+        console.log("Stopped observing all nodes.");
+    };
+
+    return { startObserving, stopObserving };
 })();
 
 // Start observing when ready
-MutationObserverManager.startObserving();
+chrome.storage.local.get("isActive", (result) => {
+    if (result.isActive) {
+        MutationObserverManager.startObserving();
+    }
+});
