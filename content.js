@@ -702,6 +702,7 @@ const MutationObserverManager = (() => {
             createTimeSlotObserver(timeSlotHeadersNode); // Start observing the time slot headers
         } else {
             if (debug) console.log("Time slot headers not found.");
+			return;
         }
 
         // Locate the first patient card (2nd child of the first child)
