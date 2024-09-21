@@ -591,6 +591,7 @@ chrome.runtime.onMessage.addListener((request) => {
     } else if (request.message === "updatePatientData") {
         updatePatientDataToMatchScreen();
     } else if (request.message === "outputPatientLists") {
+
 		PatientManager.logAllPatientData();
 	} else if (request.message === "clearPatientData") {
 		PatientManager.clearAllPatientData();
@@ -647,6 +648,8 @@ chrome.runtime.onMessage.addListener((request) => {
                         console.log("Removed Nodes:", mutation.removedNodes);
                         console.log("Attribute Name:", mutation.attributeName);
                     }
+	PatientManager.logAllPatientData();
+  
 
                     // Check for added or removed nodes
                     [...mutation.addedNodes, ...mutation.removedNodes].forEach(node => {
@@ -668,6 +671,7 @@ chrome.runtime.onMessage.addListener((request) => {
         });
         timeSlotObserver.observe(timeSlotHeadersNode, observerOptions);
         activeObservers.activeObservers.push({ observer: timeSlotObserver, node: timeSlotHeadersNode }); // Track this observer
+
     };
 
     // Function to create an observer for a patient card
@@ -711,6 +715,7 @@ chrome.runtime.onMessage.addListener((request) => {
         activeObservers.push({ observer: patientCardObserver, node: patientCardNode }); // Track this observer
     };
 
+
     // Function to locate the time slots header row based on the deep hierarchy
     const locateTimeSlotHeadersNode = () => {
         const patientListNode = document.querySelector('div[data-testid="PatientList"]');
@@ -726,6 +731,7 @@ chrome.runtime.onMessage.addListener((request) => {
             createTimeSlotObserver(timeSlotHeadersNode); // Start observing the time slot headers
         } else {
             if (debug) console.log("Time slot headers not found.");
+			return;
         }
 
         // Locate the first patient card (2nd child of the first child)
@@ -780,6 +786,7 @@ chrome.runtime.onMessage.addListener((request) => {
     };
 
     return { startObserving, stopObserving, logObserverDetails };
+
 })();
  */
 // Expose the logObserverDetails function to the global scope

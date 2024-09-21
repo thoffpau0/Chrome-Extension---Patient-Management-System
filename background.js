@@ -98,6 +98,12 @@ chrome.action.onClicked.addListener(() => {
     toggleExtension();
 });
 
+chrome.runtime.onStartup.addListener(() => {
+    chrome.storage.local.set({ isExtensionActive: false });
+    updateIcon();
+    console.log("Extension set to inactive on startup.");
+});
+
 // Function to toggle the extension's active state
 function toggleExtension() {
     isExtensionActive = !isExtensionActive;
