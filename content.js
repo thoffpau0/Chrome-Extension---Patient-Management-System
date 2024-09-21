@@ -1,4 +1,5 @@
 let debug = false; // Initial debug state
+let isActive = false; // Extension starts deactivated
 let cachedPatientList = null; // Cache patient list element
 let globalTimeSlots = [];
 
@@ -47,24 +48,21 @@ const AudioManager = (() => {
     };
 
     const processQueue = async () => {
-        if (chimeQueue.length === 0) {
-            isPlaying = false;
-            return; // No more chimes in the queue
-        }
-
-        isPlaying = true;
-        const nextChime = chimeQueue.shift(); // Get the next chime from the queue
-
-        try {
-            await nextChime(); // Wait for the chime to finish playing
-        } catch (error) {
-            console.error("Error processing chime:", error);
-        }
-
-        // Continue with the next chime in the queue
-        processQueue();
-    };
-
+	  try {
+		if (chimeQueue.length === 0) {
+		  isPlaying = false;
+		  return;
+		}
+		isPlaying = true;
+		const nextChime = chimeQueue.shift();
+		await nextChime();
+		processQueue();
+	  } catch (error) {
+		console.error("Error processing chime:", error);
+		isPlaying = false;
+	  }
+	};
+	
     return { playChime };
 })();
 
@@ -239,7 +237,10 @@ const initializePatientData = (patientName) => {
 const handlePatientDataUpdate = (node) => {
     // Find patient name
     const patientName = findPatientName(node);
-    if (!patientName) return;
+    if (!patientName) {
+        console.error("Patient name not found.");
+        return;
+    }
 
     // Initialize the patient if not present in the data
     if (!PatientManager.getPatientData(patientName)) {
@@ -337,6 +338,16 @@ const handlePatientDataUpdate = (node) => {
 
     if (debug) console.log(`Updated patient data for ${patientName}`);
 };
+
+const debounce = (func, wait) => {
+  let timeout;
+  return (...args) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(this, args), wait);
+  };
+};
+
+const handlePatientDataUpdateDebounced = debounce(handlePatientDataUpdate, 200);
 
 const searchForDiagnostics = (node) => {
     // Helper function to search recursively for diagnostics in child nodes
@@ -580,81 +591,130 @@ chrome.runtime.onMessage.addListener((request) => {
     } else if (request.message === "updatePatientData") {
         updatePatientDataToMatchScreen();
     } else if (request.message === "outputPatientLists") {
-	PatientManager.logAllPatientData();
-    } else if (request.message === "clearPatientData") {
-	PatientManager.clearAllPatientData();
-	resetTimeSlots();
-	resetCachedPatientList();
-	console.log("All patient data has been cleared.");
-    } else if (request.message === "toggleExtensionState") {
-        if (request.state) {
-            // If the extension is activated, start observing
-			console.log("The extension is activated, start observing");
-            MutationObserverManager.startObserving();
+
+		PatientManager.logAllPatientData();
+	} else if (request.message === "clearPatientData") {
+		PatientManager.clearAllPatientData();
+		resetTimeSlots();
+		resetCachedPatientList();
+		if (debug) console.log("All patient data has been cleared.");
+	}if (request.message === "toggleExtensionState") {
+         isActive = request.state;
+        if (isActive) {
+            if (debug) console.log("Extension activated. Starting polling.");
+            startPolling();
         } else {
-            // If the extension is deactivated, stop observing
-			console.log("The extension is de-activated, stop observing");
-            MutationObserverManager.stopObserving();
+            if (debug) console.log("Extension deactivated. Stopping polling.");
+            stopPolling();
         }
-    }
+    }else {
+		console.warn("Unknown message received:", request.message);
+	}
 });
 
-const MutationObserverManager = (() => {
-	let activeObservers = []; // Track all active observers
+/* const MutationObserverManager = (() => {
+    const observerOptions = {
+        childList: true,
+        attributes: true,
+        characterData: true,
+        subtree: true,
+    };
+
+    const activeObservers = []; // Track all active observers
+
+    if (debug) console.log("Observer options:", observerOptions);
 	
+	
+	const logObserverDetails = () => {
+	  console.log('Logging MutationObserver details...');
+	  console.log('Number of active observers:', activeObservers.length);
+	  activeObservers.forEach(({ observer, node }, index) => {
+		console.log(`Observer ${index}:`, observer);
+		console.log(`Observing node:`, node);
+	  });
+	};
+
     // Function to create an observer for time slots header row
     const createTimeSlotObserver = (timeSlotHeadersNode) => {
-        console.log("Creating Time Slot Observer");
+        if (debug) console.log("Creating Time Slot Observer on node:", timeSlotHeadersNode);
         const timeSlotObserver = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-            console.log("Time slot mutation detected:", mutation);
+            try {
+                mutations.forEach((mutation) => {
+                    if (debug) {
+                        console.log("Mutation detected on time slot headers:");
+                        console.log("Type:", mutation.type);
+                        console.log("Target:", mutation.target);
+                        console.log("Added Nodes:", mutation.addedNodes);
+                        console.log("Removed Nodes:", mutation.removedNodes);
+                        console.log("Attribute Name:", mutation.attributeName);
+                    }
+	PatientManager.logAllPatientData();
+  
 
-            // Check for added or removed nodes
-            [...mutation.addedNodes, ...mutation.removedNodes].forEach(node => {
-                if (node.nodeType === 1) {
-                    console.log("Node added or removed in time slot header:", node);
-                    handleTimeSlotHeadersChange(timeSlotHeadersNode);
-                }
-            });
+                    // Check for added or removed nodes
+                    [...mutation.addedNodes, ...mutation.removedNodes].forEach(node => {
+                        if (node.nodeType === 1) {
+                            if (debug) console.log("Node added or removed in time slot header:", node);
+                            handleTimeSlotHeadersChange(timeSlotHeadersNode);
+                        }
+                    });
 
-            // Also check if any modifications happen within the time slot header
-            if (mutation.target === timeSlotHeadersNode || timeSlotHeadersNode.contains(mutation.target)) {
-                console.log("Time slot header modified:", mutation.target);
-                handleTimeSlotHeadersChange(timeSlotHeadersNode); // Modified time slot header
+                    // Also check if any modifications happen within the time slot header
+                    if (mutation.target === timeSlotHeadersNode || timeSlotHeadersNode.contains(mutation.target)) {
+                        if (debug) console.log("Time slot header modified:", mutation.target);
+                        handleTimeSlotHeadersChange(timeSlotHeadersNode); // Modified time slot header
+                    }
+                });
+            } catch (error) {
+                console.error("Error in timeSlotObserver callback:", error);
             }
         });
-    });
+        timeSlotObserver.observe(timeSlotHeadersNode, observerOptions);
+        activeObservers.activeObservers.push({ observer: timeSlotObserver, node: timeSlotHeadersNode }); // Track this observer
 
-	    timeSlotObserver.observe(timeSlotHeadersNode, { childList: true, subtree: true });
-	    activeObservers.push(timeSlotObserver); // Track this observer
     };
 
     // Function to create an observer for a patient card
     const createPatientCardObserver = (patientCardNode) => {
-		console.log("Creating Patient Card Observer"); // Confirm observer creation
-		const patientCardObserver = new MutationObserver((mutations) => {
-			mutations.forEach((mutation) => {
-				console.log("Mutation detected on patient card:", mutation);
+        if (debug) console.log("Creating Patient Card Observer on node:", patientCardNode);
+        const patientCardObserver = new MutationObserver((mutations) => {
+            try {
+                mutations.forEach((mutation) => {
+                    if (debug) {
+                        console.log("Mutation detected on patient card:");
+                        console.log("Type:", mutation.type);
+                        console.log("Target:", mutation.target);
+                        console.log("Added Nodes:", mutation.addedNodes);
+                        console.log("Removed Nodes:", mutation.removedNodes);
+                        console.log("Attribute Name:", mutation.attributeName);
+                    }
 
-				// Check for added or removed nodes
-				[...mutation.addedNodes, ...mutation.removedNodes].forEach(node => {
-					if (node.nodeType === 1) {
-						console.log("Node added or removed:", node);
-						handlePatientDataUpdate(node); // New or removed patient card
-					}
-				});
+                    // Check for added or removed nodes
+                    [...mutation.addedNodes, ...mutation.removedNodes].forEach(node => {
+                        if (debug) console.log("Handling mutation on target:", mutation.target);
+                        if (node.nodeType === 1) {
+                            if (debug) console.log("Node added or removed:", node);
+                            handlePatientDataUpdate(node); // New or removed patient card
+                            if (debug) console.log("Finished processing mutation on target:", mutation.target);
+                        }
+                    });
 
-				// Also check if any modifications happen within the patient card
-				if (mutation.target === patientCardNode || patientCardNode.contains(mutation.target)) {
-					console.log("Patient card modified:", mutation.target);
-					handlePatientDataUpdate(patientCardNode); // Modified patient card
-				}
-			});
-		});
-		
-    patientCardObserver.observe(patientCardNode, { childList: true, subtree: true });
-    activeObservers.push(patientCardObserver); // Track this observer
-};
+                    // Also check if any modifications happen within the patient card
+                    if (mutation.target === patientCardNode || patientCardNode.contains(mutation.target)) {
+                        if (debug) console.log("Patient card modified:", mutation.target);
+                        handlePatientDataUpdate(patientCardNode); // Modified patient card
+                        if (debug) console.log("Finished processing mutation on target:", mutation.target);
+                    }
+                });
+            } catch (error) {
+                console.error("Error in patientCardObserver callback:", error);
+            }
+        });
+
+        patientCardObserver.observe(patientCardNode, observerOptions);
+        activeObservers.push({ observer: patientCardObserver, node: patientCardNode }); // Track this observer
+    };
+
 
     // Function to locate the time slots header row based on the deep hierarchy
     const locateTimeSlotHeadersNode = () => {
@@ -662,40 +722,9 @@ const MutationObserverManager = (() => {
         return patientListNode?.firstElementChild?.firstElementChild?.firstElementChild?.firstElementChild?.firstElementChild?.children[1] || null;
     };
 
-    // Wait for the patient list to be fully loaded (no loading indicator)
-    const waitForPatientList = () => {
-        const patientListNode = document.querySelector('div[data-testid="PatientList"]');
-
-        // Helper function to search recursively for the "Patient List Loading Indicator"
-        const isLoadingIndicatorPresent = (node) => {
-            if (!node) return false;
-
-            // If the current node has aria-label="Patient List Loading Indicator", return true
-            if (node.getAttribute && node.getAttribute('aria-label') === 'Patient List Loading Indicator') {
-                return true;
-            }
-
-            // Recursively check child nodes
-            for (let child of node.children) {
-                if (isLoadingIndicatorPresent(child)) {
-                    return true; // If any child node has the loading indicator, return true
-                }
-            }
-
-            return false; // No loading indicator found in this node or its children
-        };
-
-        if (patientListNode && !isLoadingIndicatorPresent(patientListNode)) {
-            // If the patient list exists and there is no loading indicator, start observing
-            startObserving(patientListNode);
-        } else {
-            if (debug) console.log("PatientList node not ready. Retrying...");
-            setTimeout(waitForPatientList, 250); // Retry after 250ms if patient list not found or still loading
-        }
-    };
-
-    // Function to start observing the time slot headers and all patient cards
-    const startObserving = (patientListNode) => {
+    // Function to attach observers to the patient list
+    const attachObservers = (patientListNode) => {
+        if (debug) console.log("Attaching observers to patientListNode:", patientListNode);
         // Locate the time slot headers row using the correct hierarchy
         const timeSlotHeadersNode = locateTimeSlotHeadersNode();
         if (timeSlotHeadersNode) {
@@ -723,19 +752,64 @@ const MutationObserverManager = (() => {
         }
     };
 
-     // Stop all observers
-    const stopObserving = () => {
-        activeObservers.forEach(observer => observer.disconnect());
-        activeObservers = []; // Clear the observers list
-        console.log("Stopped observing all nodes.");
+    // Start observing when the patient list is ready
+    const startObserving = () => {
+        if (activeObservers.length > 0) {
+            if (debug) console.log("Observers are already active.");
+            return;
+        }
+
+        const patientListNode = document.querySelector('div[data-testid="PatientList"]');
+
+        if (patientListNode) {
+            if (debug) console.log("PatientList node found:", patientListNode);
+            // Check if the patient list is fully loaded
+            const loadingIndicator = patientListNode.querySelector('[aria-label="Patient List Loading Indicator"]');
+            if (!loadingIndicator) {
+                if (debug) console.log("Patient list is fully loaded. Starting observers.");
+                attachObservers(patientListNode);
+            } else {
+                if (debug) console.log("Patient list is still loading.");
+                setTimeout(startObserving, 250);
+            }
+        } else {
+            if (debug) console.log("PatientList node not found. Retrying...");
+            setTimeout(startObserving, 250);
+        }
     };
 
-    return { startObserving, stopObserving };
+    // Stop all observers
+    const stopObserving = () => {
+        activeObservers.forEach(observer => observer.disconnect());
+        activeObservers.length = 0; // Clear the array
+        if (debug) console.log("Stopped observing all nodes.");
+    };
+
+    return { startObserving, stopObserving, logObserverDetails };
+
 })();
+ */
+// Expose the logObserverDetails function to the global scope
+//window.logObserverDetails = MutationObserverManager.logObserverDetails;
 
 // Start observing when ready
-chrome.storage.local.get("isActive", (result) => {
-    if (result.isActive) {
-        MutationObserverManager.startObserving();
+//MutationObserverManager.startObserving();
+
+let pollingInterval = null;
+
+const startPolling = () => {
+     if (isActive && !pollingInterval) {
+        pollingInterval = setInterval(() => {
+            updatePatientDataToMatchScreen();
+        }, 500); // Adjust the interval as needed
+        if (debug) console.log("Started polling for patient data updates.");
     }
-});
+};
+
+const stopPolling = () => {
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+        if (debug) console.log("Stopped polling for patient data updates.");
+    }
+};
