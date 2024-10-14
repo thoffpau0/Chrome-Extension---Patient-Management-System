@@ -1,0 +1,51 @@
+// manifest.template.json
+{
+  "name": "Vet Radar Notification",
+  "version": "1.0",
+  "manifest_version": 3,
+  "background": {
+    "service_worker": "background.bundle.js",
+    "type": "module"
+  },
+  "permissions": [
+    "contextMenus",
+    "tabs",
+    "storage"
+  ],
+  "action": {
+    "default_icon": {
+      "48": "icons/icon48_off.png"
+    }
+  },
+  "icons": {
+    "128": "icons/icon128.png",
+	"48": "icons/icon48_on.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "resources/<%= DEFAULT_MP3_FILENAME %>"
+      ],
+      "matches": ["https://app.vetradar.com/*"]
+    }
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://app.vetradar.com/*"],
+      "js": [
+        "content_scripts/globals.js",
+        "content_scripts/utilities.js",
+        "content_scripts/patientManager.js",
+        "content_scripts/audioManager.js",
+        "content_scripts/domHandlers.js",
+        "content_scripts/messageHandler.js",
+        "content_scripts/polling.js",
+        "content_scripts/main.js"
+      ]
+    }
+  ],
+  "host_permissions": [
+    "https://app.vetradar.com/*"
+  ],
+  "options_page": "html/options.html"
+}
