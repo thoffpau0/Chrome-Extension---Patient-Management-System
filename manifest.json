@@ -3,8 +3,7 @@
   "version": "1.0",
   "manifest_version": 3,
   "background": {
-    "service_worker": "dist/background.bundle.js", // Updated to bundled script
-    "type": "module" // Enable ES6 modules in the service worker
+    "service_worker": "background.js"
   },
   "permissions": [
     "contextMenus",
@@ -13,17 +12,17 @@
   ],
   "action": {
     "default_icon": {
-      "48": "icons/icon48_off.png"
+      "48": "icon48_off.png"
     }
   },
   "icons": {
-	"48": "icons/icon48_on.png",
-    "128": "icons/icon128.png"
+    "128": "icon128.png"
   },
   "web_accessible_resources": [
     {
       "resources": [
-        "resources/3_tone_chime-99718.mp3"
+        "3_tone_chime-99718.mp3",
+        "simple-notification-152054.mp3"
       ],
       "matches": ["https://app.vetradar.com/*"]
     }
@@ -31,21 +30,11 @@
   "content_scripts": [
     {
       "matches": ["https://app.vetradar.com/*"],
-      "js": [
-	    "src/constants.js",           // Load constants first
-        "content_scripts/globals.js",
-        "content_scripts/utilities.js",
-        "content_scripts/patientManager.js",
-        "content_scripts/audioManager.js",
-        "content_scripts/domHandlers.js",
-        "content_scripts/messageHandler.js",
-        "content_scripts/polling.js",
-        "content_scripts/main.js"
-      ]
+      "js": ["content.js"]
     }
   ],
   "host_permissions": [
     "https://app.vetradar.com/*"
   ],
-  "options_page": "html/options.html"
+  "options_page": "options.html"
 }
