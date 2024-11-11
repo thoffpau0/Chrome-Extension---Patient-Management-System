@@ -1,11 +1,9 @@
-// manifest.template.json
 {
   "name": "Vet Radar Notification",
   "version": "1.0",
   "manifest_version": 3,
   "background": {
-    "service_worker": "background.bundle.js",
-    "type": "module"
+    "service_worker": "background.bundle.js"
   },
   "permissions": [
     "contextMenus",
@@ -18,13 +16,13 @@
     }
   },
   "icons": {
-    "128": "icons/icon128.png",
-	"48": "icons/icon48_on.png"
+    "48": "icons/icon48_on.png",
+    "128": "icons/icon128.png"
   },
   "web_accessible_resources": [
     {
       "resources": [
-        "resources/<%= DEFAULT_MP3_FILENAME %>"
+        "resources/3_tone_chime-99718.mp3"
       ],
       "matches": ["https://app.vetradar.com/*"]
     }
@@ -33,19 +31,23 @@
     {
       "matches": ["https://app.vetradar.com/*"],
       "js": [
-        "content_scripts/globals.js",
-        "content_scripts/utilities.js",
-        "content_scripts/patientManager.js",
-        "content_scripts/audioManager.js",
-        "content_scripts/domHandlers.js",
-        "content_scripts/messageHandler.js",
-        "content_scripts/polling.js",
-        "content_scripts/main.js"
-      ]
+        "shared.bundle.js", // Shared dependencies
+        "main.bundle.js",
+        "domHandlers.bundle.js",
+        "messageHandler.bundle.js",
+		"audioManager.bundle.js",
+		"options.bundle.js",
+		"patientManager.bundle.js",
+		"utilities.bundle.js"		
+      ],
+      "run_at": "document_idle"
     }
   ],
   "host_permissions": [
     "https://app.vetradar.com/*"
   ],
-  "options_page": "html/options.html"
+  "options_page": "html/options.html",
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
 }
