@@ -165,26 +165,30 @@ const decodeHtmlEntities = (str) => {
 };
 
 // Helper function to recursively check all children of an element
-const findPatientNameInChildren = (element) => {
-    // If the current element has textContent and a title that matches the criteria
-    if (element.textContent && element.title.match(/^".+" [A-Za-z]+$|".+"$/)) {
-        const patientName = element.title.match(/^".+" [A-Za-z]+$|".+"$/);
-        if (patientName && patientName[0]) {
-            let normalizedName = patientName[0].replace(/['"]/g, '').trim().toLowerCase();
-            return normalizedName;
-        }
+function findPatientNameInChildren(element) {
+    if (element.textContent) {
+      const patientNameMatch = element.textContent.match(
+        /^"(.+)"(?: [A-Za-z'\s]+)?$/
+      );
+      if (patientNameMatch && patientNameMatch[1]) {
+        let normalizedName = patientNameMatch[1]
+          .replace(/['"]/g, '')
+          .trim()
+          .toLowerCase();
+        return normalizedName;
+      }
     }
 
     // Recursively check all child elements
     for (let child of element.children) {
-        const result = findPatientNameInChildren(child);
-        if (result) {
-            return result;  // Return the name if found
-        }
+      const result = findPatientNameInChildren(child);
+      if (result) {
+        return result; // Return the name if found
+      }
     }
-    
-    return null;  // No name found in this branch
-};
+
+    return null; // No name found in this branch
+  }
 
 // Main function to find patient name
 const findPatientName = (patientListItem) => {
