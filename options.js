@@ -557,6 +557,7 @@ document.addEventListener('DOMContentLoaded', () => {
     /**
      * Save settings and close options page.
      */
+
     if (saveSettings) {
         saveSettings.addEventListener('click', () => {
             if (settingsChanged) {

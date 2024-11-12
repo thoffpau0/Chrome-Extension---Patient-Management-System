@@ -13,6 +13,7 @@
   ],
   "action": {
     "default_icon": {
+
 	  "48" : "icon48_off.png"
     },
 	"default_title": "Vet Radar Extension"
@@ -21,16 +22,20 @@
     "48" : "icon48_off.png",
     "48" : "icon48_on.png",
 	"128": "icon128.png"
+
   },
   "web_accessible_resources": [
     {
       "resources": [
         "3_tone_chime-99718.mp3",
+
         "simple-notification-152054.mp3",
         "mixkit-doorbell-single-press-333.mp3",
         "mixkit-bell-notification-933.mp3",
         "BuddyIn.mp3",
         "Goodbye.mp3"
+
+
       ],
       "matches": ["https://app.vetradar.com/*"]
     }
