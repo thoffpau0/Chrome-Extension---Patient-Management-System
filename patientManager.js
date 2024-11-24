@@ -6,12 +6,37 @@
     // Ensure your namespace exists
     global.VR_Mon_App = global.VR_Mon_App || {};
 
+    // Define the AudioManager if not already defined
+    global.VR_Mon_App.AudioManager = global.VR_Mon_App.AudioManager || {
+        playChime: (type) => {
+            // Implement the chime playing logic here
+            const audio = new Audio(global.VR_Mon_App.AudioManager.getSoundFileURL(type));
+            audio.play();
+        },
+        getSoundFileURL: (type) => {
+            // Return the URL based on the type
+            switch (type) {
+                case 'diagnostics':
+                    return chrome.runtime.getURL("diagnostics_doorbell.mp3"); // Replace with your actual file
+                case 'patientAdded':
+                    return chrome.runtime.getURL("BuddyIn.mp3"); // Replace with your actual file
+                case 'patientRemoved':
+                    return chrome.runtime.getURL("Goodbye.mp3"); // Replace with your actual file
+                default:
+                    return chrome.runtime.getURL("diagnostics_doorbell.mp3"); // Default sound
+            }
+        }
+    };
+
     // Define the PatientManager module and assign it to your namespace
     global.VR_Mon_App.PatientManager = (() => {
         // Private variables
         const patientsData = {};
         let globalTimeSlots = [];
-        let previousPatientNames = new Set();
+        let previousPatientNames = new Set(); // Track previous patient names
+
+        // Reference to AudioManager
+        const AudioManager = global.VR_Mon_App.AudioManager;
 
         // Centralized logging function
         const logDebug = (message, ...args) => {
@@ -108,6 +133,94 @@
         };
 
         /**
+         * Checks if a node indicates a notification.
+         * @param {HTMLElement} node - The node to check.
+         * @param {string} category - The category to determine specific checks.
+         * @returns {boolean} True if a notification is present, false otherwise.
+         */
+        const checkForNotification = (node, category) => {
+            if (!node) return false;
+
+            switch (category) {
+                case 'criticalNotes':
+                    // For Critical Notes, check if its child node has a 'title' attribute
+                    const criticalChild = node.querySelector('[title]');
+                    if (criticalChild) {
+                        //return true;
+                        return false; // No sound on critical notes for now
+                    }
+                    break;
+
+                case 'missed':
+                case 'due':
+                    // For Missed and Due, check if they have grandchildren nodes
+                    for (let child of node.children) {
+                        for (let grandChild of child.children) {
+                            return true; // Found a grandchild node
+                        }
+                    }
+                    break;
+
+                default:
+                    if (category.startsWith('timeSlots.')) {
+                        // For Time Slots, check if they have grandchildren nodes
+                        for (let child of node.children) {
+                            for (let grandChild of child.children) {
+                                return true; // Found a grandchild node
+                            }
+                        }
+                    }
+                    break;
+            }
+
+            return false;
+        };
+
+        /**
+         * Updates notification status for a specific node.
+         * @param {string} patientName - The name of the patient.
+         * @param {string} category - The category to update.
+         * @param {HTMLElement} node - The DOM node to process.
+         */
+        const updateNotificationStatusForNode = (patientName, category, node) => {
+            const hasNotification = checkForNotification(node, category);
+
+            // Retrieve current notification status
+            const currentData = patientsData[patientName];
+            let currentCategoryStatus;
+
+            if (category.startsWith('timeSlots.')) {
+                const timeSlotIndex = category.split('.')[1];
+                const timeSlotKey = globalTimeSlots[timeSlotIndex];
+
+                if (!timeSlotKey) {
+                    logDebug(`Time slot key ${timeSlotIndex} not found in globalTimeSlots`);
+                    return;
+                }
+
+                currentCategoryStatus = currentData.timeSlots[timeSlotKey]?.hasNotification || false;
+            } else {
+                currentCategoryStatus = currentData[category]?.hasNotification || false;
+            }
+
+            // If a new notification is detected, play the sound
+            if (hasNotification && !currentCategoryStatus) {
+                AudioManager.playChime('diagnostics');
+            }
+
+            // Update patient data
+            const updatedData = { hasNotification };
+
+            if (category.startsWith('timeSlots.')) {
+                currentData.timeSlots[globalTimeSlots[category.split('.')[1]]] = updatedData;
+            } else {
+                currentData[category] = updatedData;
+            }
+
+            logDebug(`Notification status updated for ${category}:`, updatedData);
+        };
+
+        /**
          * Initializes patient data with time slots.
          * @param {string} patientName - The name of the patient.
          */
@@ -119,9 +232,14 @@
             }
 
             logDebug(`Initializing patient data for ${patientName} with time slots:`, timeSlots);
-            const initialData = { criticalNotes: null, missed: null, due: null, timeSlots: {} };
+            const initialData = {
+                criticalNotes: { hasNotification: false },
+                missed: { hasNotification: false },
+                due: { hasNotification: false },
+                timeSlots: {}
+            };
             timeSlots.forEach(time => {
-                initialData.timeSlots[time] = { diagnostics: 0, medication: 0, nursingCare: 0 };
+                initialData.timeSlots[time] = { hasNotification: false };
             });
 
             updatePatientData(patientName, initialData);
@@ -135,7 +253,12 @@
          */
         const updatePatientData = (patientName, category, data) => {
             if (!patientsData[patientName]) {
-                patientsData[patientName] = { criticalNotes: null, missed: null, due: null, timeSlots: {} };
+                patientsData[patientName] = {
+                    criticalNotes: { hasNotification: false },
+                    missed: { hasNotification: false },
+                    due: { hasNotification: false },
+                    timeSlots: {}
+                };
             }
 
             if (typeof category === 'object') {
@@ -151,90 +274,7 @@
         };
 
         /**
-         * Searches for a specific task type in the node.
-         * @param {HTMLElement} node - The node to search within.
-         * @param {string} taskType - The task type to search for.
-         * @returns {number} The task count or 0 if not found.
-         */
-        const searchForTaskType = (node, taskType) => {
-            if (!node) return 0;
-
-            const stack = [node];
-
-            while (stack.length > 0) {
-                const currentNode = stack.pop();
-
-                if (currentNode.nodeType === Node.ELEMENT_NODE) {
-                    const dataTestId = currentNode.getAttribute('data-testId');
-                    if (dataTestId === taskType) {
-                        const taskNumber = parseInt(currentNode.previousElementSibling?.textContent.trim(), 10);
-                        return !isNaN(taskNumber) ? taskNumber : 1;
-                    }
-
-                    for (let child of currentNode.children) {
-                        stack.push(child);
-                    }
-                }
-            }
-
-            return 0;
-        };
-
-        /**
-         * Updates task counts for diagnostics, medication, and nursing care for a specific node.
-         * @param {string} patientName - The name of the patient.
-         * @param {string} category - The category to update.
-         * @param {HTMLElement} node - The DOM node to process.
-         */
-        const updateTaskCountsForNode = (patientName, category, node) => {
-            const diagnosticsCount = searchForTaskType(node, 'Diagnostics');
-            const medicationCount = searchForTaskType(node, 'Medication');
-            const nursingCareCount = searchForTaskType(node, 'Nursing Care');
-
-            const currentData = patientsData[patientName];
-            let currentCategoryData;
-
-            if (category.startsWith('timeSlots.')) {
-                const timeSlotIndex = category.split('.')[1];
-                const timeSlotKey = globalTimeSlots[timeSlotIndex];
-
-                if (!timeSlotKey) {
-                    logDebug(`Time slot key ${timeSlotIndex} not found in globalTimeSlots`);
-                    return;
-                }
-
-                currentCategoryData = currentData.timeSlots[timeSlotKey] || {};
-            } else {
-                currentCategoryData = currentData[category] || {};
-            }
-
-            const playChimeIfIncreased = (taskName, newCount, currentCount) => {
-                if (newCount > currentCount) {
-                    AudioManager.playChime(taskName);
-                }
-            };
-
-            playChimeIfIncreased('diagnostics', diagnosticsCount, currentCategoryData.diagnostics || 0);
-            playChimeIfIncreased('medication', medicationCount, currentCategoryData.medication || 0);
-            playChimeIfIncreased('nursingCare', nursingCareCount, currentCategoryData.nursingCare || 0);
-
-            const updatedData = {
-                diagnostics: diagnosticsCount,
-                medication: medicationCount,
-                nursingCare: nursingCareCount,
-            };
-
-            if (category.startsWith('timeSlots.')) {
-                currentData.timeSlots[globalTimeSlots[category.split('.')[1]]] = updatedData;
-            } else {
-                currentData[category] = updatedData;
-            }
-
-            logDebug(`Counts updated for ${category}:`, updatedData);
-        };
-
-        /**
-         * Handles updates to patient data for Diagnostics, Medication, and Nursing Care.
+         * Handles updates to patient data for notifications.
          * @param {HTMLElement} node - The DOM node to process.
          */
         const handlePatientDataUpdate = (node) => {
@@ -254,24 +294,62 @@
                 return;
             }
 
-            const categories = ['criticalNotes', 'missed', 'due'];
-            let currentNode = patientBar.firstElementChild;
+            // Access the nested children within the first child of patientBar to correctly map categories and time slots
+			const getNestedChildren = (parent, level = 1) => {
+				let children = Array.from(parent.children);
+				for (let i = 0; i < level; i++) {
+					if (children.length > 0) {
+						children = Array.from(children[0].children);
+					} else {
+						return [];
+					}
+				}
+				return children;
+			};
 
-            categories.forEach(category => {
-                if (currentNode) {
-                    updateTaskCountsForNode(patientName, category, currentNode);
-                    currentNode = currentNode.nextElementSibling;
+			// Usage:
+			const childNodes = getNestedChildren(patientBar, 1); // Adjust level as needed
+
+            // Define the main categories
+            const categories = ['criticalNotes', 'missed', 'due'];
+
+            // Iterate over the child nodes
+            childNodes.forEach((childNode, index) => {
+                if (index < categories.length) {
+                    // Assign to main categories
+                    const category = categories[index];
+                    updateNotificationStatusForNode(patientName, category, childNode);
+                } else {
+                    // Assign to time slots
+                    const timeSlotIndex = index - categories.length;
+                    updateNotificationStatusForNode(patientName, `timeSlots.${timeSlotIndex}`, childNode);
                 }
             });
 
-            let timeSlotIndex = 0;
-            while (currentNode) {
-                updateTaskCountsForNode(patientName, `timeSlots.${timeSlotIndex}`, currentNode);
-                currentNode = currentNode.nextElementSibling;
-                timeSlotIndex++;
+            logDebug(`Updated patient data for ${patientName}`);
+        };
+
+        /**
+         * Initializes existing patients without triggering chimes.
+         * Call this function during extension startup or installation.
+         */
+        const initializeExistingPatients = () => {
+            const patientList = getPatientList();
+            if (!patientList) {
+                logDebug("Patient list not found during initialization.");
+                return;
             }
 
-            logDebug(`Updated patient data for ${patientName}`);
+            const patientCards = Array.from(patientList.querySelectorAll('div[aria-label="Patient List Item"]'));
+            patientCards.forEach(patientCard => {
+                const patientName = findPatientName(patientCard);
+                if (patientName) {
+                    previousPatientNames.add(patientName);
+                    initializePatientData(patientName);
+                }
+            });
+
+            logDebug("Initialized existing patients without triggering chimes.");
         };
 
         /**
@@ -288,30 +366,43 @@
 
             const currentPatientNames = new Set();
             const patientCards = Array.from(patientList.querySelectorAll('div[aria-label="Patient List Item"]'));
+
+            // Iterate through each patient card to collect current patient names
             patientCards.forEach(patientCard => {
                 const patientName = findPatientName(patientCard);
                 if (patientName) {
                     currentPatientNames.add(patientName);
-                    handlePatientDataUpdate(patientCard);
                 }
             });
 
+            // Determine added and removed patients
             const addedPatients = new Set([...currentPatientNames].filter(x => !previousPatientNames.has(x)));
             const removedPatients = new Set([...previousPatientNames].filter(x => !currentPatientNames.has(x)));
 
+            // Handle added patients
             addedPatients.forEach(patientName => {
                 initializePatientData(patientName);
                 AudioManager.playChime('patientAdded');
                 logDebug(`Patient added: ${patientName}`);
             });
 
+            // Handle removed patients
             removedPatients.forEach(patientName => {
                 removePatientData(patientName);
                 AudioManager.playChime('patientRemoved');
                 logDebug(`Patient removed: ${patientName}`);
             });
 
-            previousPatientNames = currentPatientNames;
+            // Handle updates for existing patients
+            patientCards.forEach(patientCard => {
+                const patientName = findPatientName(patientCard);
+                if (patientName && !addedPatients.has(patientName)) {
+                    handlePatientDataUpdate(patientCard);
+                }
+            });
+
+            // Update the previous patient names set for next comparison
+            previousPatientNames = new Set(currentPatientNames);
 
             logDebug("Patient data and Time Slots updated to match the current screen.");
         };
@@ -356,7 +447,7 @@
                 logDebug("Added time slots:", addedTimeSlots);
                 Object.keys(patientsData).forEach(patientName => {
                     addedTimeSlots.forEach(addedSlot => {
-                        patientsData[patientName].timeSlots[addedSlot] = { diagnostics: 0, medication: 0, nursingCare: 0 };
+                        patientsData[patientName].timeSlots[addedSlot] = { hasNotification: false };
                     });
                 });
                 updatePatientDataToMatchScreen();
@@ -405,6 +496,7 @@
             updatePatientDataToMatchScreen,
             resetTimeSlots,
             handleTimeSlotHeadersChange,
+            initializeExistingPatients, // Expose the initialization method
         };
     })();
 
