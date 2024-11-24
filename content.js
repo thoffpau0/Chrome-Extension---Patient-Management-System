@@ -15,234 +15,6 @@ const logDebug = (message, ...args) => {
     }
 };
 
-const AudioManager = (function () {
-    let isPlaying = false;
-    const chimeQueue = [];
-    let cachedSoundFiles = {};
-    let cachedVolume = 0.5; // Default master volume
-    let cachedLibraryVolumes = {}; // Per-sound volume settings
-
-    const MAX_QUEUE_SIZE = 20;
-
-    /**
-     * Loads and caches the selected sounds and volume.
-     */
-    const loadSounds = () => {
-        chrome.storage.local.get(['soundFileDiagnostics', 'soundFileMedication', 'soundFileNursingCare', 'soundFilePatientAdded', 'soundFilePatientRemoved', 'chimeVolume'], result => {
-            // Load custom sounds if available, otherwise use defaults
-            cachedSoundFiles = {
-                diagnostics:
-                    result.soundFileDiagnostics ||
-                    chrome.runtime.getURL('3_tone_chime-99718.mp3'), // Default for Diagnostics
-                medication:
-                    result.soundFileMedication ||
-                    chrome.runtime.getURL('mixkit-bell-notification-933.mp3'), // Default for Medication
-                nursingCare:
-                    result.soundFileNursingCare ||
-                    chrome.runtime.getURL('mixkit-doorbell-single-press-333.mp3'), // Default for Nursing Care
-                patientAdded:
-                    result.soundFilePatientAdded ||
-                    chrome.runtime.getURL('BuddyIn.mp3'), // Default for Patient Added
-                patientRemoved:
-                    result.soundFilePatientRemoved ||
-                    chrome.runtime.getURL('Goodbye.mp3'), // Default for Patient Removed
-            };
-
-            cachedVolume =
-                result.chimeVolume !== undefined ? result.chimeVolume : 0.5;
-
-            logDebug('Sounds loaded:', cachedSoundFiles);
-            logDebug('Master Chime volume:', cachedVolume);
-            // Preload audio
-            preloadAudio();
-        });
-    };
-
-    /**
-     * Loads and caches per-sound volume settings.
-     */
-    const loadLibraryVolumes = () => {
-        // Assuming per-sound volumes are named as 'volumeLibraryDiagnostics', etc.
-        const volumeKeys = ['volumeLibraryDiagnostics', 'volumeLibraryMedication', 'volumeLibraryNursingCare', 'volumeLibraryPatientAdded', 'volumeLibraryPatientRemoved'];
-        chrome.storage.local.get(volumeKeys, (result) => {
-            for (const key of volumeKeys) {
-                cachedLibraryVolumes[key.replace('volumeLibrary', '').toLowerCase()] = result[key] !== undefined ? result[key] : 1.0;
-            }
-            logDebug('Per-sound volumes loaded:', cachedLibraryVolumes);
-        });
-    };
-
-    /**
-     * Preloads the audio files to reduce playback latency.
-     */
-    const preloadAudio = () => {
-        try {
-            // Preload each audio file
-            for (const key in cachedSoundFiles) {
-                const audioObj = new Audio();
-                audioObj.src = cachedSoundFiles[key];
-                audioObj.load();
-                cachedSoundFiles[key] = audioObj; // Store Audio objects instead of URLs
-                logDebug(`Audio preloaded for ${key}:`, cachedSoundFiles[key].src);
-            }
-        } catch (error) {
-            console.error('Error preloading audio:', error);
-        }
-    };
-
-    /**
-     * Plays a chime sound based on the soundType.
-     * @param {string} soundType - The type of sound to play ('diagnostics', 'medication', 'nursingCare', 'patientAdded', 'patientRemoved').
-     */
-    const playChime = (soundType) => {
-        if (chimeQueue.length >= MAX_QUEUE_SIZE) {
-            logDebug('Chime queue is full. Chime request ignored.');
-            return;
-        }
-        logDebug('playChime() called. isPlaying:', isPlaying, 'soundType:', soundType);
-
-        chimeQueue.push(() => {
-            return new Promise((resolve, reject) => {
-                // Use cached Audio objects
-                const audioObj =
-                    cachedSoundFiles[soundType] || cachedSoundFiles['diagnostics']; // Fallback to Diagnostics default
-
-                logDebug('Using audio object:', audioObj.src);
-                logDebug('Master volume set to:', cachedVolume);
-                logDebug('Per-sound volume set to:', cachedLibraryVolumes[soundType] || 1.0);
-
-                try {
-                    // Clone the Audio object to allow overlapping sounds
-                    const audioClone = audioObj.cloneNode();
-                    const perSoundVolume = cachedLibraryVolumes[soundType] || 1.0;
-                    audioClone.volume = cachedVolume * perSoundVolume;
-
-                    const playPromise = audioClone.play();
-                    if (playPromise !== undefined) {
-                        playPromise
-                            .then(() => {
-                                logDebug(`Chime sound started playing for ${soundType}.`);
-                            })
-                            .catch(error => {
-                                console.error('Error playing chime sound:', error);
-                                reject(error);
-                            });
-                    }
-
-                    audioClone.onended = () => {
-                        logDebug(`Chime sound finished playing for ${soundType}.`);
-                        resolve();
-                    };
-
-                    audioClone.onerror = event => {
-                        console.error('Audio playback error:', event);
-                        reject(event);
-                    };
-                } catch (error) {
-                    console.error('Error initializing audio:', error);
-                    reject(error);
-                }
-            });
-        });
-
-        if (!isPlaying) {
-            processQueue();
-        }
-    };
-
-    /**
-     * Processes the chime queue, ensuring that chimes are played sequentially.
-     */
-    const processQueue = () => {
-        if (chimeQueue.length === 0) {
-            isPlaying = false;
-            return;
-        }
-        isPlaying = true;
-        const nextChime = chimeQueue.shift();
-        nextChime()
-            .then(() => {
-                processQueue();
-            })
-            .catch(error => {
-                console.error('Error processing chime:', error);
-                processQueue(); // Continue processing the queue even if there's an error
-            });
-    };
-
-    /**
-     * Cleans up audio resources to prevent memory leaks.
-     */
-    const cleanup = () => {
-        chimeQueue.length = 0; // Clear the queue
-        isPlaying = false;
-        cachedSoundFiles = {};
-        cachedLibraryVolumes = {};
-        cachedVolume = 0.5; // Reset to default volume
-        logDebug('Audio resources have been cleaned up.');
-    };
-
-    /**
-     * Updates sound files and volume dynamically when storage changes.
-     */
-    const updateSoundsFromStorage = (changes, area) => {
-        if (area === 'local') {
-            let shouldPreload = false;
-
-            if (changes.soundFileDiagnostics) {
-                cachedSoundFiles.diagnostics = changes.soundFileDiagnostics.newValue || chrome.runtime.getURL('3_tone_chime-99718.mp3');
-                shouldPreload = true;
-            }
-            if (changes.soundFileMedication) {
-                cachedSoundFiles.medication = changes.soundFileMedication.newValue || chrome.runtime.getURL('mixkit-bell-notification-933.mp3');
-                shouldPreload = true;
-            }
-            if (changes.soundFileNursingCare) {
-                cachedSoundFiles.nursingCare = changes.soundFileNursingCare.newValue || chrome.runtime.getURL('mixkit-doorbell-single-press-333.mp3');
-                shouldPreload = true;
-            }
-            if (changes.soundFilePatientAdded) {
-                cachedSoundFiles.patientAdded = changes.soundFilePatientAdded.newValue || chrome.runtime.getURL('BuddyIn.mp3');
-                shouldPreload = true;
-            }
-            if (changes.soundFilePatientRemoved) {
-                cachedSoundFiles.patientRemoved = changes.soundFilePatientRemoved.newValue || chrome.runtime.getURL('Goodbye.mp3');
-                shouldPreload = true;
-            }
-            if (changes.chimeVolume) {
-                cachedVolume = changes.chimeVolume.newValue;
-                shouldPreload = true;
-            }
-
-            // Handle per-sound volume changes
-            const volumeKeys = Object.keys(cachedLibraryVolumes).map(key => `volumeLibrary${capitalizeFirstLetter(key)}`);
-            for (const key of volumeKeys) {
-                if (changes[key]) {
-                    const soundType = key.replace('volumeLibrary', '').toLowerCase();
-                    cachedLibraryVolumes[soundType] = changes[key].newValue;
-                    logDebug(`Per-sound volume updated for ${soundType}:`, changes[key].newValue);
-                }
-            }
-
-            if (shouldPreload) {
-                preloadAudio();
-            }
-        }
-    };
-
-    // Listen for changes in storage to update sounds and volume dynamically
-    chrome.storage.onChanged.addListener(updateSoundsFromStorage);
-
-    // Initialize by loading the sounds, master volume, and per-sound volumes
-    loadSounds();
-    loadLibraryVolumes();
-
-    return {
-        playChime,
-        cleanup,
-    };
-})();
-
 // Patient data management module
 const PatientManager = (() => {
     const patientsData = {};
@@ -522,7 +294,6 @@ const handlePatientDataUpdate = (node) => {
     if (debug) console.log(`Updated patient data for ${patientName}`);
 };
 
-
 // Generic function to search for a specific task type (e.g., Diagnostics, Medication, NursingCare) in the node
 const searchForTaskType = (node, taskType) => {
     // Helper function to search recursively for the task type in child nodes
@@ -687,7 +458,6 @@ const updateTaskCountsForNode = (patientName, category, node) => {
 
     if (debug) console.log(`Counts updated for ${category}: Diagnostics=${currentDiagnosticsCount}, Medication=${currentMedicationCount}, Nursing Care=${currentNursingCareCount}`);
 };
-
 
 const handleTimeSlotHeadersChange = (timeSlotHeadersNode) => {
     if (debug) console.log("Time slot headers changed:", timeSlotHeadersNode);
@@ -855,10 +625,10 @@ const stopPolling = () => {
     }
 };
 
-/**
- * Initializes the extension's active state and starts polling if active.
- */
 const initializeExtensionState = () => {
+/**
+* Initializes the extension's active state and starts polling if active.
+*/
     chrome.storage.local.get(['isActive'], (result) => {
         isActive = result.isActive !== undefined ? result.isActive : true; // Default to true if not set
         if (isActive) {

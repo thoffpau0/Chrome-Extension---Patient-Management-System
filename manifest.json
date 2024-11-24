@@ -1,6 +1,6 @@
 {
   "name": "Vet Radar Notification",
-  "version": "1.0",
+  "version": "1.1",
   "manifest_version": 3,
   "background": {
     "service_worker": "background.js"
@@ -28,7 +28,6 @@
     {
       "resources": [
         "3_tone_chime-99718.mp3",
-
         "simple-notification-152054.mp3",
         "mixkit-doorbell-single-press-333.mp3",
         "mixkit-bell-notification-933.mp3",
@@ -43,7 +42,7 @@
   "content_scripts": [
     {
       "matches": ["https://app.vetradar.com/*"],
-      "js": ["content.js"]
+      "js": ["audioManager.js", "content.js"]
     }
   ],
   "host_permissions": [
