@@ -42,7 +42,7 @@
   "content_scripts": [
     {
       "matches": ["https://app.vetradar.com/*"],
-      "js": ["audioManager.js", "content.js"]
+      "js": ["audioManager.js", "patientManager.js", "content.js"]
     }
   ],
   "host_permissions": [
