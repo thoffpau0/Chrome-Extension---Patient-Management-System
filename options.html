@@ -5,54 +5,100 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Extension Settings</title>
     <style>
-        /* General Styles */
-
         body {
             font-family: Arial, sans-serif;
             padding: 20px;
             background-color: #f4f4f4;
-
             color: #333;
         }
 
         h1, h2 {
             font-size: 24px;
             margin-bottom: 20px;
-            color: #333;
-        }
-
-        .sound-setting {
-            padding: 20px;
-            background-color: #fff;
-            border-radius: 8px;
-            margin-bottom: 30px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        }
-
-        .sound-setting p.current-sound {
-            font-size: 16px;
-            margin-bottom: 10px;
-
         }
 
         label {
-            display: block;
-            margin-bottom: 8px;
             font-weight: bold;
-            color: #555;
         }
 
-        /* Dropzone Styles */
-        .dropzone {
+        /* Volume Control Styles */
+        .volume-control {
+            margin-bottom: 30px;
+        }
+
+        .volume-control label {
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .volume-control input[type="range"] {
             width: 100%;
+        }
+
+        .volume-control span {
+            display: inline-block;
+            margin-top: 5px;
+            font-size: 14px;
+        }
+
+        /* Sound Library Styles */
+        #soundLibrary {
             padding: 20px;
-            border: 2px dashed #ccc;
-            border-radius: 5px;
-            text-align: center;
-            color: #aaa;
-            margin-bottom: 10px;
-            transition: background-color 0.3s, border-color 0.3s, color 0.3s;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .sound-row {
+            display: flex;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .sound-row:last-child {
+            border-bottom: none;
+        }
+
+        .sound-row label {
+            flex: 1;
+            font-size: 14px;
+        }
+
+        .sound-row input[type="checkbox"] {
+            margin-right: 10px;
+            transform: scale(1.2);
+        }
+
+        .sound-row select {
+            flex: 2;
+            margin-right: 10px;
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .sound-row button {
+            margin-right: 10px;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
             cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .sound-row button.reset-button {
+            background-color: #f44336;
+        }
+
+        .sound-row .dropzone {
+            flex: 2;
+            padding: 10px;
+            border: 2px dashed #ccc;
+            border-radius: 4px;
+            text-align: center;
+            margin-right: 10px;
         }
 
         .dropzone.dragover {
@@ -61,190 +107,70 @@
             color: #4CAF50;
         }
 
-        /* Button Styles */
-        button {
-            padding: 8px 16px;
+        .sound-row .volume-slider {
+            flex: 2;
+            display: flex;
+            align-items: center;
+        }
+
+        .sound-row .volume-slider input[type="range"] {
+            flex: 1;
+            margin-right: 10px;
+        }
+
+        .sound-row .volume-slider span {
+            width: 50px;
+            text-align: center;
+        }
+
+        /* Buttons at Bottom */
+        .action-buttons {
+            margin-top: 20px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .action-buttons button {
+            padding: 10px 20px;
             font-size: 14px;
             border: none;
-            border-radius: 4px;
+            border-radius: 5px;
             cursor: pointer;
-            margin-right: 10px;
-            transition: background-color 0.3s ease;
         }
 
-        button.play-button {
-            background-color: #008CBA;
-            color: white;
-        }
-
-        button.play-button:hover:not(:disabled) {
-            background-color: #005f73;
-        }
-
-        button.play-button:disabled {
-            background-color: #ccc;
-            cursor: not-allowed;
-        }
-
-        button.reset-button {
-            background-color: #f44336;
-            color: white;
-        }
-
-        button.reset-button:hover:not(:disabled) {
-            background-color: #d7352b;
-        }
-
-        button.save-button {
+        .action-buttons .save-button {
             background-color: #4CAF50;
             color: white;
         }
 
-        button.save-button:hover:not(:disabled) {
-            background-color: #388e3c;
-        }
-
-        button.save-button:disabled {
-
+        .action-buttons .save-button:disabled {
             background-color: #ccc;
             cursor: not-allowed;
         }
 
-        button.disable-button {
+        .action-buttons .restore-button {
             background-color: #f44336;
             color: white;
         }
 
-        button.disable-button:hover {
-            background-color: #d7352b;
-        }
-
-        button.restore-button {
-            background-color: #2196F3;
-            color: white;
-        }
-
-        button.restore-button:hover {
-            background-color: #1769aa;
-        }
-
-        /* Volume Control Styles */
-        .volume-control {
-            margin-top: 10px;
-            margin-bottom: 20px;
-        }
-
-        .volume-control label {
-            margin-bottom: 5px;
-            display: block;
-            font-weight: bold;
-            color: #555;
-        }
-
-        .volume-control input[type="range"] {
-            width: 100%;
-            -webkit-appearance: none;
-            height: 8px;
-            border-radius: 4px;
-            background: #ddd;
-            outline: none;
-            transition: background 0.3s ease;
-        }
-
-        .volume-control input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background: #007BFF;
-            cursor: pointer;
-            transition: background 0.3s ease;
-        }
-
-        .volume-control input[type="range"]::-webkit-slider-thumb:hover {
-            background: #0056b3;
-        }
-
-        .volume-control input[type="range"]::-moz-range-thumb {
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background: #007BFF;
-            cursor: pointer;
-            transition: background 0.3s ease;
-        }
-
-        .volume-control input[type="range"]::-moz-range-thumb:hover {
-            background: #0056b3;
-        }
-
-        .volume-control span {
-            display: inline-block;
-            margin-top: 5px;
-            font-size: 14px;
-            color: #555;
-        }
-
-        /* Error Message Styles */
-        .error {
-            color: red;
-            margin-top: 10px;
-            font-weight: bold;
-        }
-
-        /* Accessibility Focus Styles */
-        button:focus, .dropzone:focus, select:focus, input[type="range"]:focus {
-            outline: 3px solid #4CAF50;
-        }
-
-        /* Sound Library Styles */
-        #soundLibrary select {
-            width: 70%;
-            padding: 8px;
-            font-size: 14px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            margin-bottom: 10px;
-            background-color: #fff;
-            appearance: none;
-        }
-
-        #soundLibrary select:disabled {
-            background-color: #e9e9e9;
-        }
-
-        #soundLibrary button.play-library-button {
-            background-color: #FF9800;
-            color: white;
-        }
-
-        #soundLibrary button.play-library-button:hover:not(:disabled) {
-            background-color: #e68900;
-        }
-
-        #soundLibrary button.play-library-button:disabled {
-            background-color: #ccc;
-            cursor: not-allowed;
-        }
-
         /* Responsive Design */
         @media (max-width: 600px) {
-            .sound-setting {
-                padding: 15px;
-                margin-bottom: 20px;
+            .sound-row {
+                flex-wrap: wrap;
             }
 
-            button {
-                width: 100%;
+            .sound-row label,
+            .sound-row select,
+            .sound-row button,
+            .sound-row .dropzone,
+            .sound-row .volume-slider {
+                flex: 100%;
                 margin-bottom: 10px;
             }
 
-            #soundLibrary select {
-                width: 100%;
-                margin-bottom: 10px;
+            .sound-row button:last-child {
+                margin-bottom: 0;
             }
-
         }
     </style>
 </head>
@@ -258,181 +184,77 @@
         <span id="volumeValue">50%</span>
     </div>
 
-    <!-- Sound Settings for Each Type -->
-    <div id="soundSettings">
-        <!-- Diagnostics Sound -->
-        <div class="sound-setting">
-            <p class="current-sound" id="currentSoundDiagnostics">Diagnostics Sound: 3_tone_chime-99718.mp3</p>
-            <label for="soundPickerDiagnostics">Choose a sound file for Diagnostics (MP3):</label>
-            <div class="dropzone" id="dropzoneDiagnostics" tabindex="0" aria-label="Diagnostics Sound Upload Dropzone">
-                Drag and drop an MP3 file here or click to select a file.
-            </div>
-            <button class="play-button" id="playDiagnostics">Play</button>
-            <button class="reset-button" id="resetDiagnostics">Reset to Default</button>
-        </div>
-        
-        <!-- Medication Sound -->
-        <div class="sound-setting">
-            <p class="current-sound" id="currentSoundMedication">Medication Sound: mixkit-bell-notification-933.mp3</p>
-            <label for="soundPickerMedication">Choose a sound file for Medication (MP3):</label>
-            <div class="dropzone" id="dropzoneMedication" tabindex="0" aria-label="Medication Sound Upload Dropzone">
-                Drag and drop an MP3 file here or click to select a file.
-            </div>
-            <button class="play-button" id="playMedication">Play</button>
-            <button class="reset-button" id="resetMedication">Reset to Default</button>
-        </div>
-        
-        <!-- Nursing Care Sound -->
-        <div class="sound-setting">
-            <p class="current-sound" id="currentSoundNursingCare">Nursing Care Sound: mixkit-doorbell-single-press-333.mp3</p>
-            <label for="soundPickerNursingCare">Choose a sound file for Nursing Care (MP3):</label>
-            <div class="dropzone" id="dropzoneNursingCare" tabindex="0" aria-label="Nursing Care Sound Upload Dropzone">
-                Drag and drop an MP3 file here or click to select a file.
-            </div>
-            <button class="play-button" id="playNursingCare">Play</button>
-            <button class="reset-button" id="resetNursingCare">Reset to Default</button>
-        </div>
-        
-        <!-- Patient Added Sound -->
-        <div class="sound-setting">
-            <p class="current-sound" id="currentSoundPatientAdded">Patient Added Sound: BuddyIn.mp3</p>
-            <label for="soundPickerPatientAdded">Choose a sound file for Patient Added (MP3):</label>
-            <div class="dropzone" id="dropzonePatientAdded" tabindex="0" aria-label="Patient Added Sound Upload Dropzone">
-                Drag and drop an MP3 file here or click to select a file.
-            </div>
-            <button class="play-button" id="playPatientAdded">Play</button>
-            <button class="reset-button" id="resetPatientAdded">Reset to Default</button>
-        </div>
-        
-        <!-- Patient Removed Sound -->
-        <div class="sound-setting">
-            <p class="current-sound" id="currentSoundPatientRemoved">Patient Removed Sound: Goodbye.mp3</p>
-            <label for="soundPickerPatientRemoved">Choose a sound file for Patient Removed (MP3):</label>
-            <div class="dropzone" id="dropzonePatientRemoved" tabindex="0" aria-label="Patient Removed Sound Upload Dropzone">
-                Drag and drop an MP3 file here or click to select a file.
-            </div>
-            <button class="play-button" id="playPatientRemoved">Play</button>
-            <button class="reset-button" id="resetPatientRemoved">Reset to Default</button>
-        </div>
-    </div>
-
     <!-- Sound Library Section -->
-    <div id="soundLibrary" class="sound-setting">
+    <div id="soundLibrary">
         <h2>Sound Library</h2>
-        <label>Select a predefined sound for each type:</label>
-        
-        <!-- Diagnostics Sound -->
-        <div class="library-item">
-            <label for="libraryDiagnostics">Diagnostics Sound:</label>
-            <select id="libraryDiagnostics" aria-label="Diagnostics Sound Library Selection">
-                <option value="">-- Select a sound --</option>
-                <option value="3_tone_chime-99718.mp3">3_tone_chime-99718.mp3</option>
+
+        <!-- Notification Sound -->
+        <div class="sound-row">
+            <input type="checkbox" id="enableNotification" checked>
+            <label for="enableNotification">Notification Sound</label>
+            <select id="libraryNotification">
+                <option value="default_notification.mp3">Default Notification</option>
                 <option value="predefined-sound1.mp3">Predefined Sound 1</option>
                 <option value="predefined-sound2.mp3">Predefined Sound 2</option>
-                <!-- Add more predefined sounds as needed -->
             </select>
-            <button class="play-library-button" id="playLibraryDiagnostics">Play</button>
-            
-            <!-- Volume Slider -->
-            <div class="volume-control">
-                <label for="volumeLibraryDiagnostics">Volume:</label>
-                <input type="range" id="volumeLibraryDiagnostics" min="0" max="1" step="0.05" value="0.5" aria-label="Diagnostics Sound Volume Slider">
-                <span id="volumeLibraryDiagnosticsValue">50%</span>
+            <div class="volume-slider">
+                <input type="range" id="volumeLibraryNotification" min="0" max="1" step="0.05" value="0.5">
+                <span id="volumeLibraryNotificationValue">50%</span>
             </div>
+            <div class="dropzone" id="dropzoneNotification" tabindex="0">
+                Drag & drop or click to select a file
+            </div>
+            <button class="reset-button" id="resetNotification">Reset</button>
+            <button id="playLibraryNotification">Play</button>
         </div>
-        
-        <!-- Medication Sound -->
-        <div class="library-item">
-            <label for="libraryMedication">Medication Sound:</label>
-            <select id="libraryMedication" aria-label="Medication Sound Library Selection">
-                <option value="">-- Select a sound --</option>
-                <option value="mixkit-bell-notification-933.mp3">mixkit-bell-notification-933.mp3</option>
+
+        <!-- Patient Added Sound -->
+        <div class="sound-row">
+            <input type="checkbox" id="enablePatientAdded" checked>
+            <label for="enablePatientAdded">Patient Added Sound</label>
+            <select id="libraryPatientAdded">
+                <option value="BuddyIn.mp3">Buddy In</option>
                 <option value="predefined-sound3.mp3">Predefined Sound 3</option>
                 <option value="predefined-sound4.mp3">Predefined Sound 4</option>
-                <!-- Add more predefined sounds as needed -->
             </select>
-            <button class="play-library-button" id="playLibraryMedication">Play</button>
-            
-            <!-- Volume Slider -->
-            <div class="volume-control">
-                <label for="volumeLibraryMedication">Volume:</label>
-                <input type="range" id="volumeLibraryMedication" min="0" max="1" step="0.05" value="0.5" aria-label="Medication Sound Volume Slider">
-                <span id="volumeLibraryMedicationValue">50%</span>
-            </div>
-        </div>
-        
-        <!-- Nursing Care Sound -->
-        <div class="library-item">
-            <label for="libraryNursingCare">Nursing Care Sound:</label>
-            <select id="libraryNursingCare" aria-label="Nursing Care Sound Library Selection">
-                <option value="">-- Select a sound --</option>
-                <option value="mixkit-doorbell-single-press-333.mp3">mixkit-doorbell-single-press-333.mp3</option>
-                <option value="predefined-sound5.mp3">Predefined Sound 5</option>
-                <option value="predefined-sound6.mp3">Predefined Sound 6</option>
-                <!-- Add more predefined sounds as needed -->
-            </select>
-            <button class="play-library-button" id="playLibraryNursingCare">Play</button>
-            
-            <!-- Volume Slider -->
-            <div class="volume-control">
-                <label for="volumeLibraryNursingCare">Volume:</label>
-                <input type="range" id="volumeLibraryNursingCare" min="0" max="1" step="0.05" value="0.5" aria-label="Nursing Care Sound Volume Slider">
-                <span id="volumeLibraryNursingCareValue">50%</span>
-            </div>
-        </div>
-        
-        <!-- Patient Added Sound -->
-        <div class="library-item">
-            <label for="libraryPatientAdded">Patient Added Sound:</label>
-            <select id="libraryPatientAdded" aria-label="Patient Added Sound Library Selection">
-                <option value="">-- Select a sound --</option>
-                <option value="BuddyIn.mp3">BuddyIn.mp3</option>
-                <option value="predefined-sound7.mp3">Predefined Sound 7</option>
-                <option value="predefined-sound8.mp3">Predefined Sound 8</option>
-                <!-- Add more predefined sounds as needed -->
-            </select>
-            <button class="play-library-button" id="playLibraryPatientAdded">Play</button>
-            
-            <!-- Volume Slider -->
-            <div class="volume-control">
-                <label for="volumeLibraryPatientAdded">Volume:</label>
-                <input type="range" id="volumeLibraryPatientAdded" min="0" max="1" step="0.05" value="0.5" aria-label="Patient Added Sound Volume Slider">
+            <div class="volume-slider">
+                <input type="range" id="volumeLibraryPatientAdded" min="0" max="1" step="0.05" value="0.5">
                 <span id="volumeLibraryPatientAddedValue">50%</span>
             </div>
+            <div class="dropzone" id="dropzonePatientAdded" tabindex="0">
+                Drag & drop or click to select a file
+            </div>
+            <button class="reset-button" id="resetPatientAdded">Reset</button>
+            <button id="playLibraryPatientAdded">Play</button>
         </div>
-        
+
         <!-- Patient Removed Sound -->
-        <div class="library-item">
-            <label for="libraryPatientRemoved">Patient Removed Sound:</label>
-            <select id="libraryPatientRemoved" aria-label="Patient Removed Sound Library Selection">
-                <option value="">-- Select a sound --</option>
-                <option value="Goodbye.mp3">Goodbye.mp3</option>
-                <option value="predefined-sound9.mp3">Predefined Sound 9</option>
-                <option value="predefined-sound10.mp3">Predefined Sound 10</option>
-                <!-- Add more predefined sounds as needed -->
+        <div class="sound-row">
+            <input type="checkbox" id="enablePatientRemoved" checked>
+            <label for="enablePatientRemoved">Patient Removed Sound</label>
+            <select id="libraryPatientRemoved">
+                <option value="Goodbye.mp3">Goodbye</option>
+                <option value="predefined-sound5.mp3">Predefined Sound 5</option>
+                <option value="predefined-sound6.mp3">Predefined Sound 6</option>
             </select>
-            <button class="play-library-button" id="playLibraryPatientRemoved">Play</button>
-            
-            <!-- Volume Slider -->
-            <div class="volume-control">
-                <label for="volumeLibraryPatientRemoved">Volume:</label>
-                <input type="range" id="volumeLibraryPatientRemoved" min="0" max="1" step="0.05" value="0.5" aria-label="Patient Removed Sound Volume Slider">
+            <div class="volume-slider">
+                <input type="range" id="volumeLibraryPatientRemoved" min="0" max="1" step="0.05" value="0.5">
                 <span id="volumeLibraryPatientRemovedValue">50%</span>
             </div>
+            <div class="dropzone" id="dropzonePatientRemoved" tabindex="0">
+                Drag & drop or click to select a file
+            </div>
+            <button class="reset-button" id="resetPatientRemoved">Reset</button>
+            <button id="playLibraryPatientRemoved">Play</button>
         </div>
     </div>
 
     <!-- Action Buttons -->
-    <div style="margin-top: 20px;">
-        <button class="save-button" id="saveSettings" disabled>Save and Close</button>
-        <button class="disable-button" id="disableButton">Disable Extension</button>
-        <button class="restore-button" id="restoreDefaults">Restore All to Default</button>
+    <div class="action-buttons">
+        <button class="save-button" id="saveSettings" disabled>Save Settings</button>
+        <button class="restore-button" id="restoreDefaults">Restore All Defaults</button>
     </div>
 
-    <!-- Error Message Display -->
-    <div class="error" id="errorMessage" role="alert" aria-live="assertive"></div>
-
-    <!-- JavaScript -->
     <script src="options.js"></script>
 </body>
 </html>
