@@ -38,8 +38,8 @@
 
                 cachedVolume = result.chimeVolume !== undefined ? result.chimeVolume : 0.5;
 
-                logDebug('Sounds loaded:', cachedSoundFiles);
-                logDebug('Master Chime volume:', cachedVolume);
+                logDebugAudioManager('Sounds loaded:', cachedSoundFiles);
+                logDebugAudioManager('Master Chime volume:', cachedVolume);
 
                 // Preload audio
                 preloadAudio();
@@ -61,7 +61,7 @@
                 for (const key of volumeKeys) {
                     cachedLibraryVolumes[key.replace('volumeLibrary', '').toLowerCase()] = result[key] !== undefined ? result[key] : 1.0;
                 }
-                logDebug('Per-sound volumes loaded:', cachedLibraryVolumes);
+                logDebugAudioManager('Per-sound volumes loaded:', cachedLibraryVolumes);
             });
         }
 
@@ -76,7 +76,7 @@
                     audioObj.src = cachedSoundFiles[key];
                     audioObj.load();
                     cachedSoundFiles[key] = audioObj; // Store Audio objects instead of URLs
-                    logDebug(`Audio preloaded for ${key}:`, cachedSoundFiles[key].src);
+                    logDebugAudioManager(`Audio preloaded for ${key}:`, cachedSoundFiles[key].src);
                 }
             } catch (error) {
                 console.error('Error preloading audio:', error);
@@ -89,19 +89,19 @@
          */
         function playChime(soundType) {
             if (chimeQueue.length >= MAX_QUEUE_SIZE) {
-                logDebug('Chime queue is full. Chime request ignored.');
+                logDebugAudioManager('Chime queue is full. Chime request ignored.');
                 return;
             }
-            logDebug('playChime() called. isPlaying:', isPlaying, 'soundType:', soundType);
+            logDebugAudioManager('playChime() called. isPlaying:', isPlaying, 'soundType:', soundType);
 
             chimeQueue.push(() => {
                 return new Promise((resolve, reject) => {
                     // Use cached Audio objects
                     const audioObj = cachedSoundFiles[soundType] || cachedSoundFiles['diagnostics']; // Fallback to Diagnostics default
 
-                    logDebug('Using audio object:', audioObj.src);
-                    logDebug('Master volume set to:', cachedVolume);
-                    logDebug('Per-sound volume set to:', cachedLibraryVolumes[soundType] || 1.0);
+                    logDebugAudioManager('Using audio object:', audioObj.src);
+                    logDebugAudioManager('Master volume set to:', cachedVolume);
+                    logDebugAudioManager('Per-sound volume set to:', cachedLibraryVolumes[soundType] || 1.0);
 
                     try {
                         // Clone the Audio object to allow overlapping sounds
@@ -113,7 +113,7 @@
                         if (playPromise !== undefined) {
                             playPromise
                                 .then(() => {
-                                    logDebug(`Chime sound started playing for ${soundType}.`);
+                                    logDebugAudioManager(`Chime sound started playing for ${soundType}.`);
                                 })
                                 .catch(error => {
                                     console.error('Error playing chime sound:', error);
@@ -122,7 +122,7 @@
                         }
 
                         audioClone.onended = () => {
-                            logDebug(`Chime sound finished playing for ${soundType}.`);
+                            logDebugAudioManager(`Chime sound finished playing for ${soundType}.`);
                             resolve();
                         };
 
@@ -171,7 +171,7 @@
             cachedSoundFiles = {};
             cachedLibraryVolumes = {};
             cachedVolume = 0.5; // Reset to default volume
-            logDebug('Audio resources have been cleaned up.');
+            logDebugAudioManager('Audio resources have been cleaned up.');
         }
 
         /**
@@ -212,7 +212,7 @@
                     if (changes[key]) {
                         const soundType = key.replace('volumeLibrary', '').toLowerCase();
                         cachedLibraryVolumes[soundType] = changes[key].newValue;
-                        logDebug(`Per-sound volume updated for ${soundType}:`, changes[key].newValue);
+                        logDebugAudioManager(`Per-sound volume updated for ${soundType}:`, changes[key].newValue);
                     }
                 }
 
@@ -228,8 +228,8 @@
         }
 
         // Function to log debug messages
-        function logDebug(message, ...args) {
-            if (global.debug) {
+        function logDebugAudioManager(message, ...args) {
+            if (window.debug) {
                 console.log(`[AudioManager] ${message}`, ...args);
             }
         }
@@ -248,7 +248,5 @@
         };
     })();
 
-    // Expose the AudioManager to the global scope
-    global.AudioManager = AudioManager;
 
 })(window);

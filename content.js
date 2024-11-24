@@ -1,19 +1,16 @@
-let debug = true; // Initial debug state
 let isActive = true; // Extension starts deactivated
 let globalTimeSlots = [];
 let pollingInterval = null;
 let previousPatientNames = new Set();
 
-const logDebug = (message, ...args) => {
-    /**
-     * Logs messages to the console if debug mode is enabled.
-     * @param {string} message - The message to log.
-     * @param  {...any} args - Additional arguments.
-     */
-    if (debug) {
-        console.log(`[AudioManager] ${message}`, ...args);
-    }
-};
+// Ensure your namespace exists
+window.VR_Mon_App = window.VR_Mon_App || {};
+
+// Set the window.debug variable in the global scope
+window.debug = true;
+
+// Now use the AudioManager via your namespace
+const AudioManager = VR_Mon_App.AudioManager;
 
 // Patient data management module
 const PatientManager = (() => {
@@ -35,9 +32,9 @@ const PatientManager = (() => {
 			patientsData[patientName][category] = data;
 		}
 
-		if (debug) console.log(`Updated patient data for ${patientName}:`, patientsData[patientName]);
+		if (window.debug) console.log(`Updated patient data for ${patientName}:`, patientsData[patientName]);
 		// Logging the current state of patient data
-		//if (debug) console.log("Current state of all patient data:", patientsData);
+		//if (window.debug) console.log("Current state of all patient data:", patientsData);
 };
 
 
@@ -49,7 +46,7 @@ const PatientManager = (() => {
     };
 	const removePatientData = (patientName) => {
 		delete patientsData[patientName];
-		if (debug) console.log(`Patient data removed for ${patientName}`);
+		if (window.debug) console.log(`Patient data removed for ${patientName}`);
 	  };
 
     return {
@@ -74,14 +71,14 @@ const findTimeSlots = () => {
     // Step 1: Get the node with data-testid="PatientList"
     const patientListNode = document.querySelector('div[data-testid="PatientList"]');
     if (!patientListNode) {
-        if (debug) console.log("PatientList node not found.");
+        if (window.debug) console.log("PatientList node not found.");
         return timeSlots;
     }
 
     // Get the first child of the first child
     const startingNode = patientListNode.firstElementChild?.firstElementChild;
     if (!startingNode) {
-        if (debug) console.log("Starting node for time slots not found.");
+        if (window.debug) console.log("Starting node for time slots not found.");
         return timeSlots;
     }
 
@@ -106,7 +103,7 @@ const findTimeSlots = () => {
 
     searchTimeSlots(startingNode);
 
-    if (debug) console.log("Found time slots:", timeSlots);
+    if (window.debug) console.log("Found time slots:", timeSlots);
     globalTimeSlots = timeSlots;
     return timeSlots;
 };
@@ -141,7 +138,7 @@ function findPatientNameInChildren(element) {
 const findPatientName = (patientListItem) => {
     const avatarDiv = patientListItem.querySelector('div[aria-label="avatarWithMessage"]');
     if (!avatarDiv) {
-        if (debug) console.log("Avatar div not found for patientListItem:", patientListItem);
+        if (window.debug) console.log("Avatar div not found for patientListItem:", patientListItem);
         return null;
     }
 
@@ -163,7 +160,7 @@ const findPatientName = (patientListItem) => {
         }
     }
 
-    if (debug) console.log("No valid patient name found in this patient list item:", patientListItem);
+    if (window.debug) console.log("No valid patient name found in this patient list item:", patientListItem);
     return null;
 };
 
@@ -171,10 +168,10 @@ const findPatientName = (patientListItem) => {
 const initializePatientData = (patientName) => {
     const timeSlots = findTimeSlots();
     if (!timeSlots.length) {
-        if (debug) console.log(`No time slots found, skipping initialization for ${patientName}.`);
+        if (window.debug) console.log(`No time slots found, skipping initialization for ${patientName}.`);
         return;
     }
-    if (debug) console.log(`Initializing patient data for ${patientName} with time slots:`, timeSlots);
+    if (window.debug) console.log(`Initializing patient data for ${patientName} with time slots:`, timeSlots);
     const initialData = { criticalNotes: null, missed: null, due: null, timeSlots: {} };
     timeSlots.forEach(time => {
         if (!initialData.timeSlots[time]) {
@@ -222,14 +219,14 @@ const handlePatientDataUpdate = (node) => {
     // Find the Patient List Item node by recursively searching the sibling's children
     const patientListItemNode = findPatientListItemNode(node);
     if (!patientListItemNode) {
-        if (debug) console.log("Patient List Item node not found.");
+        if (window.debug) console.log("Patient List Item node not found.");
         return;
     }
 
     // The patient bar is the next sibling of the Patient List Item node
     const patientBar = patientListItemNode.nextElementSibling;
     if (!patientBar) {
-        if (debug) console.log(`Patient bar not found for node:`, node);
+        if (window.debug) console.log(`Patient bar not found for node:`, node);
         return;
     }
 
@@ -256,7 +253,7 @@ const handlePatientDataUpdate = (node) => {
     // Find the Critical Notes node
     const criticalNotesNode = findCriticalNotesNode(patientBar);
     if (!criticalNotesNode) {
-        if (debug) console.log("Critical notes node not found.");
+        if (window.debug) console.log("Critical notes node not found.");
         return;
     }
 
@@ -265,7 +262,7 @@ const handlePatientDataUpdate = (node) => {
     const dueNode = missedNode?.nextElementSibling;
 
     if (!missedNode || !dueNode) {
-        if (debug) console.log("Missed or Due nodes not found.");
+        if (window.debug) console.log("Missed or Due nodes not found.");
         return;
     }
 
@@ -291,7 +288,7 @@ const handlePatientDataUpdate = (node) => {
         timeSlotIndex++; // Increment the index for the next time slot
     }
 
-    if (debug) console.log(`Updated patient data for ${patientName}`);
+    if (window.debug) console.log(`Updated patient data for ${patientName}`);
 };
 
 // Generic function to search for a specific task type (e.g., Diagnostics, Medication, NursingCare) in the node
@@ -394,7 +391,7 @@ const updateTaskCountsForNode = (patientName, category, node) => {
         const timeSlotKey = globalTimeSlots[timeSlotIndex];
         
         if (!timeSlotKey) {
-            if (debug) console.log(`Time slot key ${timeSlotIndex} not found in globalTimeSlots`);
+            if (window.debug) console.log(`Time slot key ${timeSlotIndex} not found in globalTimeSlots`);
             return;
         }
 
@@ -456,11 +453,11 @@ const updateTaskCountsForNode = (patientName, category, node) => {
         });
     }
 
-    if (debug) console.log(`Counts updated for ${category}: Diagnostics=${currentDiagnosticsCount}, Medication=${currentMedicationCount}, Nursing Care=${currentNursingCareCount}`);
+    if (window.debug) console.log(`Counts updated for ${category}: Diagnostics=${currentDiagnosticsCount}, Medication=${currentMedicationCount}, Nursing Care=${currentNursingCareCount}`);
 };
 
 const handleTimeSlotHeadersChange = (timeSlotHeadersNode) => {
-    if (debug) console.log("Time slot headers changed:", timeSlotHeadersNode);
+    if (window.debug) console.log("Time slot headers changed:", timeSlotHeadersNode);
 
     // Collect the new time slots from the headers
     const newTimeSlots = [];
@@ -472,7 +469,7 @@ const handleTimeSlotHeadersChange = (timeSlotHeadersNode) => {
         }
     });
 
-    if (debug) console.log("New time slots found:", newTimeSlots);
+    if (window.debug) console.log("New time slots found:", newTimeSlots);
 
     // Get the old time slots
     const oldTimeSlots = [...globalTimeSlots];
@@ -488,7 +485,7 @@ const handleTimeSlotHeadersChange = (timeSlotHeadersNode) => {
 
     // Handle removed time slots
     if (removedTimeSlots.length > 0) {
-        if (debug) console.log("Removed time slots:", removedTimeSlots);
+        if (window.debug) console.log("Removed time slots:", removedTimeSlots);
 
         // For each patient, remove the diagnostics for the missing time slots
         const allPatients = PatientManager.getAllPatientData();
@@ -498,12 +495,12 @@ const handleTimeSlotHeadersChange = (timeSlotHeadersNode) => {
             });
         });
 
-        if (debug) console.log("Removed time slots from patient data.");
+        if (window.debug) console.log("Removed time slots from patient data.");
     }
 
     // Handle added time slots
     if (addedTimeSlots.length > 0) {
-        if (debug) console.log("Added time slots:", addedTimeSlots);
+        if (window.debug) console.log("Added time slots:", addedTimeSlots);
 
         // For each patient, initialize the new time slots with diagnostics count set to 0
         const allPatients = PatientManager.getAllPatientData();
@@ -515,17 +512,17 @@ const handleTimeSlotHeadersChange = (timeSlotHeadersNode) => {
 		// Trigger an update to refresh the patient data with the new time slots
 		updatePatientDataToMatchScreen();
 
-        if (debug) console.log("Added new time slots to patient data.");
+        if (window.debug) console.log("Added new time slots to patient data.");
     }
 
     // Log the updated global time slots
-    if (debug) console.log("Updated global time slots:", globalTimeSlots);
+    if (window.debug) console.log("Updated global time slots:", globalTimeSlots);
 };
 
 // Utility functions
 const getPatientList = () => {
     cachedPatientList = document.querySelector('div[data-testid="PatientList"]');
-    if (debug) console.log("Cached patient list:", cachedPatientList);
+    if (window.debug) console.log("Cached patient list:", cachedPatientList);
     return cachedPatientList; // Only re-fetch if cache is null
 };
 
@@ -533,7 +530,7 @@ const getPatientList = () => {
 const updatePatientDataToMatchScreen = () => {
     const patientList = getPatientList();
     if (!patientList) {
-        if (debug) console.log("Patient list not found.");
+        if (window.debug) console.log("Patient list not found.");
         return;
     }
 
@@ -558,20 +555,20 @@ const updatePatientDataToMatchScreen = () => {
     addedPatients.forEach(patientName => {
         initializePatientData(patientName); // Initialize patient data
         AudioManager.playChime('patientAdded'); // Play 'BuddyIn.mp3'
-        if (debug) console.log(`Patient added: ${patientName}`);
+        if (window.debug) console.log(`Patient added: ${patientName}`);
     });
 
     // Handle removed patients
     removedPatients.forEach(patientName => {
         PatientManager.removePatientData(patientName); // Remove patient data
         AudioManager.playChime('patientRemoved'); // Play 'Goodbye.mp3'
-        if (debug) console.log(`Patient removed: ${patientName}`);
+        if (window.debug) console.log(`Patient removed: ${patientName}`);
     });
 
     // Update the previous patient names set
     previousPatientNames = currentPatientNames;
 
-    if (debug) console.log("Patient data and Time Slots updated to match the current screen.");
+    if (window.debug) console.log("Patient data and Time Slots updated to match the current screen.");
 };
 
 const resetTimeSlots = () => {
@@ -583,8 +580,8 @@ chrome.runtime.onMessage.addListener((request) => {
     if (request.message === "playTestChime") {
         AudioManager.playChime(); // Reuse the AudioManager's playChime
     } else if (request.message === "toggleDebug") {
-        debug = request.debug;
-        console.log("Debug mode set to:", debug);
+        window.debug = request.window.debug;
+        console.log("window.debug mode set to:", window.debug);
     } else if (request.message === "updatePatientData") {
         updatePatientDataToMatchScreen();
     } else if (request.message === "outputPatientLists") {
@@ -593,14 +590,14 @@ chrome.runtime.onMessage.addListener((request) => {
 		PatientManager.clearAllPatientData();
 		resetTimeSlots();
 		resetCachedPatientList();
-		if (debug) console.log("All patient data has been cleared.");
+		if (window.debug) console.log("All patient data has been cleared.");
 	} else if (request.message === "toggleExtensionState") {
          isActive = request.state;
         if (isActive) {
-            if (debug) console.log("Extension activated. Starting polling.");
+            if (window.debug) console.log("Extension activated. Starting polling.");
             startPolling();
         } else {
-            if (debug) console.log("Extension deactivated. Stopping polling.");
+            if (window.debug) console.log("Extension deactivated. Stopping polling.");
             stopPolling();
         }
     } else {
@@ -613,7 +610,7 @@ const startPolling = () => {
         pollingInterval = setInterval(() => {
             updatePatientDataToMatchScreen();
         }, 2000); // Adjust the interval as needed
-        if (debug) console.log("Started polling for patient data updates.");
+        if (window.debug) console.log("Started polling for patient data updates.");
     }
 };
 
@@ -621,7 +618,7 @@ const stopPolling = () => {
     if (pollingInterval) {
         clearInterval(pollingInterval);
         pollingInterval = null;
-        if (debug) console.log("Stopped polling for patient data updates.");
+        if (window.debug) console.log("Stopped polling for patient data updates.");
     }
 };
 
@@ -633,12 +630,12 @@ const initializeExtensionState = () => {
         isActive = result.isActive !== undefined ? result.isActive : true; // Default to true if not set
         if (isActive) {
             startPolling();
-            if (debug) console.log("Extension is active. Polling started on load.");
+            if (window.debug) console.log("Extension is active. Polling started on load.");
         }
 		
-		// Optionally, set debug mode based on stored value
-        if (debug) {
-            console.log("Debug mode is enabled.");
+		// Optionally, set window.debug mode based on stored value
+        if (window.debug) {
+            console.log("window.debug mode is enabled.");
         }
     });
 };
