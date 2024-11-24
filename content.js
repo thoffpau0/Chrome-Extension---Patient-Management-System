@@ -57,20 +57,16 @@ const stopPolling = () => {
 };
 
 const initializeExtensionState = () => {
-/**
-* Initializes the extension's active state and starts polling if active.
-*/
-    chrome.storage.local.get(['isActive'], (result) => {
+    chrome.storage.local.get(['isActive', 'debug'], (result) => {
         isActive = result.isActive !== undefined ? result.isActive : true; // Default to true if not set
+        window.debug = result.debug !== undefined ? result.debug : false; // Default to false if not set
+        
         if (isActive) {
             startPolling();
             if (window.debug) console.log("Extension is active. Polling started on load.");
         }
-		
-		// Optionally, set window.debug mode based on stored value
-        if (window.debug) {
-            console.log("window.debug mode is enabled.");
-        }
+
+        console.log("window.debug mode is", window.debug ? "enabled" : "disabled");
     });
 };
 
