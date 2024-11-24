@@ -22,6 +22,8 @@
                     return chrome.runtime.getURL("BuddyIn.mp3"); // Replace with your actual file
                 case 'patientRemoved':
                     return chrome.runtime.getURL("Goodbye.mp3"); // Replace with your actual file
+                case 'examRoomNotification':
+                    return chrome.runtime.getURL("exam_room_notification.mp3"); // Replace with your actual file
                 default:
                     return chrome.runtime.getURL("diagnostics_doorbell.mp3"); // Default sound
             }
@@ -102,9 +104,43 @@
         };
 
         /**
-         * Finds and returns the patient name from a patient list item.
+         * Checks if a patient is in an exam room by searching for a specific node.
          * @param {HTMLElement} patientListItem - The patient list item element.
-         * @returns {string|null} The normalized patient name or null if not found.
+         * @returns {boolean} True if the patient is in an exam room, false otherwise.
+         */
+        const isPatientInExamRoom = (patientListItem) => {
+            // Define the prefix to search for
+            const examRoomPrefix = "Exam, ";
+
+            // Search for any node within patientListItem that starts with "Exam, "
+            const examRoomNodes = patientListItem.querySelectorAll('*:not(script):not(style)');
+
+            for (let node of examRoomNodes) {
+                const textContent = node.textContent.trim();
+                if (textContent.startsWith(examRoomPrefix)) {
+                    return true;
+                }
+            }
+
+            // Alternatively, search all text nodes for the pattern
+            const textNodes = Array.from(patientListItem.querySelectorAll('*')).flatMap(element => 
+                Array.from(element.childNodes).filter(node => node.nodeType === Node.TEXT_NODE)
+            );
+
+            for (let node of textNodes) {
+                const text = node.textContent.trim();
+                if (text.startsWith(examRoomPrefix)) {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+
+        /**
+         * Finds and returns the patient name and exam room status from a patient list item.
+         * @param {HTMLElement} patientListItem - The patient list item element.
+         * @returns {object|null} An object containing the normalized patient name and InExamRoom status, or null if not found.
          */
         const findPatientName = (patientListItem) => {
             const avatarDiv = patientListItem.querySelector('div[aria-label="avatarWithMessage"]');
@@ -118,13 +154,19 @@
             for (let sibling of siblings) {
                 const normalizedName = findPatientNameInChildren(sibling);
                 if (normalizedName) {
+                    // Check if the patient is in an exam room
+                    const inExamRoom = isPatientInExamRoom(patientListItem);
+
                     // Use stored name if available
                     for (let storedName in patientsData) {
                         if (storedName.includes(normalizedName) || normalizedName.includes(storedName)) {
-                            return storedName;
+                            // Update InExamRoom status if needed
+                            patientsData[storedName].InExamRoom = inExamRoom;
+                            return { name: storedName, InExamRoom: inExamRoom };
                         }
                     }
-                    return normalizedName;
+
+                    return { name: normalizedName, InExamRoom: inExamRoom };
                 }
             }
 
@@ -133,6 +175,63 @@
         };
 
         /**
+         * Initializes patient data with time slots.
+         * @param {string} patientName - The name of the patient.
+         * @param {boolean} inExamRoom - Whether the patient is in an exam room.
+         */
+        const initializePatientData = (patientName, inExamRoom = false) => {
+            const timeSlots = findTimeSlots();
+            if (!timeSlots.length) {
+                logDebug(`No time slots found, skipping initialization for ${patientName}.`);
+                return;
+            }
+
+            logDebug(`Initializing patient data for ${patientName} with time slots:`, timeSlots);
+            const initialData = {
+                InExamRoom: inExamRoom,
+                criticalNotes: { hasNotification: false },
+                missed: { hasNotification: false },
+                due: { hasNotification: false },
+                timeSlots: {}
+            };
+            timeSlots.forEach(time => {
+                initialData.timeSlots[time] = { hasNotification: false };
+            });
+
+            updatePatientData(patientName, initialData);
+        };
+
+        /**
+         * Updates patient data for a specific patient.
+         * @param {string} patientName - The name of the patient.
+         * @param {object|string} category - The category to update or data object.
+         * @param {object} [data] - The data to update.
+         */
+        const updatePatientData = (patientName, category, data) => {
+            if (!patientsData[patientName]) {
+                patientsData[patientName] = {
+                    InExamRoom: false, // Default value
+                    criticalNotes: { hasNotification: false },
+                    missed: { hasNotification: false },
+                    due: { hasNotification: false },
+                    timeSlots: {}
+                };
+            }
+
+            if (typeof category === 'object') {
+                Object.assign(patientsData[patientName], category);
+            } else if (category.startsWith('timeSlots.')) {
+                const timeSlotKey = category.split('.')[1];
+                patientsData[patientName].timeSlots[timeSlotKey] = data;
+            } else {
+                patientsData[patientName][category] = data;
+            }
+
+            logDebug(`Updated patient data for ${patientName}:`, patientsData[patientName]);
+        };
+
+
+		/**
          * Checks if a node indicates a notification.
          * @param {HTMLElement} node - The node to check.
          * @param {string} category - The category to determine specific checks.
@@ -203,9 +302,12 @@
                 currentCategoryStatus = currentData[category]?.hasNotification || false;
             }
 
-            // If a new notification is detected, play the sound
-            if (hasNotification && !currentCategoryStatus) {
-                AudioManager.playChime('diagnostics');
+            // Check if the patient is in an exam room
+			const isInExamRoom = currentData.InExamRoom;
+
+			// If a new notification is detected and the patient is in an exam room, play the sound
+			if (hasNotification && !currentCategoryStatus && isInExamRoom) {
+				AudioManager.playChime('diagnostics');
             }
 
             // Update patient data
@@ -220,72 +322,26 @@
             logDebug(`Notification status updated for ${category}:`, updatedData);
         };
 
-        /**
-         * Initializes patient data with time slots.
-         * @param {string} patientName - The name of the patient.
-         */
-        const initializePatientData = (patientName) => {
-            const timeSlots = findTimeSlots();
-            if (!timeSlots.length) {
-                logDebug(`No time slots found, skipping initialization for ${patientName}.`);
-                return;
-            }
 
-            logDebug(`Initializing patient data for ${patientName} with time slots:`, timeSlots);
-            const initialData = {
-                criticalNotes: { hasNotification: false },
-                missed: { hasNotification: false },
-                due: { hasNotification: false },
-                timeSlots: {}
-            };
-            timeSlots.forEach(time => {
-                initialData.timeSlots[time] = { hasNotification: false };
-            });
-
-            updatePatientData(patientName, initialData);
-        };
-
-        /**
-         * Updates patient data for a specific patient.
-         * @param {string} patientName - The name of the patient.
-         * @param {object|string} category - The category to update or data object.
-         * @param {object} [data] - The data to update.
-         */
-        const updatePatientData = (patientName, category, data) => {
-            if (!patientsData[patientName]) {
-                patientsData[patientName] = {
-                    criticalNotes: { hasNotification: false },
-                    missed: { hasNotification: false },
-                    due: { hasNotification: false },
-                    timeSlots: {}
-                };
-            }
-
-            if (typeof category === 'object') {
-                Object.assign(patientsData[patientName], category);
-            } else if (category.startsWith('timeSlots.')) {
-                const timeSlotKey = category.split('.')[1];
-                patientsData[patientName].timeSlots[timeSlotKey] = data;
-            } else {
-                patientsData[patientName][category] = data;
-            }
-
-            logDebug(`Updated patient data for ${patientName}:`, patientsData[patientName]);
-        };
 
         /**
          * Handles updates to patient data for notifications.
          * @param {HTMLElement} node - The DOM node to process.
          */
         const handlePatientDataUpdate = (node) => {
-            const patientName = findPatientName(node);
-            if (!patientName) {
-                console.error("Patient name not found.");
+            const patientInfo = findPatientName(node);
+            if (!patientInfo) {
+                console.error("Patient information not found.");
                 return;
             }
 
-            if (!patientsData[patientName]) {
-                initializePatientData(patientName);
+            const { name, InExamRoom } = patientInfo;
+
+            if (!patientsData[name]) {
+                initializePatientData(name, InExamRoom);
+            } else {
+                // Update InExamRoom status
+                patientsData[name].InExamRoom = InExamRoom;
             }
 
             const patientBar = node.nextElementSibling;
@@ -294,23 +350,8 @@
                 return;
             }
 
-            // Access the nested children within the first child of patientBar to correctly map categories and time slots
-			const getNestedChildren = (parent, level = 1) => {
-				let children = Array.from(parent.children);
-				for (let i = 0; i < level; i++) {
-					if (children.length > 0) {
-						children = Array.from(children[0].children);
-					} else {
-						return [];
-					}
-				}
-				return children;
-			};
-
-			// Usage:
-			const childNodes = getNestedChildren(patientBar, 1); // Adjust level as needed
-
-            // Define the main categories
+            // Correctly retrieve nested child nodes
+            const childNodes = Array.from(patientBar.children[0].children);
             const categories = ['criticalNotes', 'missed', 'due'];
 
             // Iterate over the child nodes
@@ -318,93 +359,118 @@
                 if (index < categories.length) {
                     // Assign to main categories
                     const category = categories[index];
-                    updateNotificationStatusForNode(patientName, category, childNode);
+                    updateNotificationStatusForNode(name, category, childNode);
                 } else {
                     // Assign to time slots
                     const timeSlotIndex = index - categories.length;
-                    updateNotificationStatusForNode(patientName, `timeSlots.${timeSlotIndex}`, childNode);
+                    updateNotificationStatusForNode(name, `timeSlots.${timeSlotIndex}`, childNode);
                 }
             });
 
-            logDebug(`Updated patient data for ${patientName}`);
+            logDebug(`Updated patient data for ${name}`);
         };
 
         /**
-         * Initializes existing patients without triggering chimes.
-         * Call this function during extension startup or installation.
+		 * Updates patient data to match the current screen.
+		 */
+		const updatePatientDataToMatchScreen = () => {
+			const patientList = getPatientList();
+			if (!patientList) {
+				logDebug("Patient list not found.");
+				return;
+			}
+
+			findTimeSlots();
+
+			const currentPatientNames = new Set();
+			const patientCards = Array.from(patientList.querySelectorAll('div[aria-label="Patient List Item"]'));
+
+			// Iterate through each patient card to collect current patient names
+			patientCards.forEach(patientCard => {
+				const patientInfo = findPatientName(patientCard);
+				if (patientInfo) {
+					const { name, InExamRoom } = patientInfo;
+					currentPatientNames.add(name);
+
+					if (patientsData[name]) {
+						// Update InExamRoom status
+						patientsData[name].InExamRoom = InExamRoom;
+					} else {
+						// Initialize patient data with InExamRoom status
+						initializePatientData(name, InExamRoom);
+						
+						// **Conditional Chime: Play only if InExamRoom is true**
+						if (InExamRoom) {
+							AudioManager.playChime('patientAdded');
+							logDebug(`Patient added (InExamRoom): ${name}`);
+						} else {
+							logDebug(`Patient added (Not in ExamRoom): ${name}`);
+						}
+					}
+				}
+			});
+
+			// Determine removed patients by comparing previous and current patient names
+			const removedPatients = new Set([...previousPatientNames].filter(x => !currentPatientNames.has(x)));
+
+			// Handle removed patients
+			removedPatients.forEach(patientName => {
+				const wasInExamRoom = patientsData[patientName]?.InExamRoom; // **Capture InExamRoom before removal**
+				
+				removePatientData(patientName);
+				
+				// **Conditional Chime: Play only if wasInExamRoom was true**
+				if (wasInExamRoom) {
+					AudioManager.playChime('patientRemoved');
+					logDebug(`Patient removed (Was in ExamRoom): ${patientName}`);
+				} else {
+					logDebug(`Patient removed (Was not in ExamRoom): ${patientName}`);
+				}
+			});
+
+			// Handle updates for existing patients who are in exam rooms
+			patientCards.forEach(patientCard => {
+				const patientInfo = findPatientName(patientCard);
+				if (patientInfo) {
+					const { name, InExamRoom } = patientInfo;
+					if (patientsData[name] && patientsData[name].InExamRoom) {
+						handlePatientDataUpdate(patientCard);
+					}
+				}
+			});
+
+			// Update the previous patient names set for next comparison
+			previousPatientNames = new Set(currentPatientNames);
+
+			logDebug("Patient data and Time Slots updated to match the current screen.");
+		};
+
+        /**
+         * Removes patient data.
+         * @param {string} patientName - The name of the patient.
          */
-        const initializeExistingPatients = () => {
-            const patientList = getPatientList();
-            if (!patientList) {
-                logDebug("Patient list not found during initialization.");
-                return;
-            }
-
-            const patientCards = Array.from(patientList.querySelectorAll('div[aria-label="Patient List Item"]'));
-            patientCards.forEach(patientCard => {
-                const patientName = findPatientName(patientCard);
-                if (patientName) {
-                    previousPatientNames.add(patientName);
-                    initializePatientData(patientName);
-                }
-            });
-
-            logDebug("Initialized existing patients without triggering chimes.");
+        const removePatientData = (patientName) => {
+            delete patientsData[patientName];
+            logDebug(`Patient data removed for ${patientName}`);
         };
 
         /**
-         * Updates patient data to match the current screen.
+         * Clears all patient data.
          */
-        const updatePatientDataToMatchScreen = () => {
-            const patientList = getPatientList();
-            if (!patientList) {
-                logDebug("Patient list not found.");
-                return;
+        const clearAllPatientData = () => {
+            for (let patientName in patientsData) {
+                delete patientsData[patientName];
             }
+            previousPatientNames.clear();
+            resetTimeSlots();
+            logDebug("All patient data has been cleared.");
+        };
 
-            findTimeSlots();
-
-            const currentPatientNames = new Set();
-            const patientCards = Array.from(patientList.querySelectorAll('div[aria-label="Patient List Item"]'));
-
-            // Iterate through each patient card to collect current patient names
-            patientCards.forEach(patientCard => {
-                const patientName = findPatientName(patientCard);
-                if (patientName) {
-                    currentPatientNames.add(patientName);
-                }
-            });
-
-            // Determine added and removed patients
-            const addedPatients = new Set([...currentPatientNames].filter(x => !previousPatientNames.has(x)));
-            const removedPatients = new Set([...previousPatientNames].filter(x => !currentPatientNames.has(x)));
-
-            // Handle added patients
-            addedPatients.forEach(patientName => {
-                initializePatientData(patientName);
-                AudioManager.playChime('patientAdded');
-                logDebug(`Patient added: ${patientName}`);
-            });
-
-            // Handle removed patients
-            removedPatients.forEach(patientName => {
-                removePatientData(patientName);
-                AudioManager.playChime('patientRemoved');
-                logDebug(`Patient removed: ${patientName}`);
-            });
-
-            // Handle updates for existing patients
-            patientCards.forEach(patientCard => {
-                const patientName = findPatientName(patientCard);
-                if (patientName && !addedPatients.has(patientName)) {
-                    handlePatientDataUpdate(patientCard);
-                }
-            });
-
-            // Update the previous patient names set for next comparison
-            previousPatientNames = new Set(currentPatientNames);
-
-            logDebug("Patient data and Time Slots updated to match the current screen.");
+        /**
+         * Logs all patient data.
+         */
+        const logAllPatientData = () => {
+            console.log("Current state of all patient data:", patientsData);
         };
 
         /**
@@ -457,34 +523,6 @@
             logDebug("Updated global time slots:", globalTimeSlots);
         };
 
-        /**
-         * Removes patient data.
-         * @param {string} patientName - The name of the patient.
-         */
-        const removePatientData = (patientName) => {
-            delete patientsData[patientName];
-            logDebug(`Patient data removed for ${patientName}`);
-        };
-
-        /**
-         * Clears all patient data.
-         */
-        const clearAllPatientData = () => {
-            for (let patientName in patientsData) {
-                delete patientsData[patientName];
-            }
-            previousPatientNames.clear();
-            resetTimeSlots();
-            logDebug("All patient data has been cleared.");
-        };
-
-        /**
-         * Logs all patient data.
-         */
-        const logAllPatientData = () => {
-            console.log("Current state of all patient data:", patientsData);
-        };
-
         // Expose public methods
         return {
             updatePatientData,
@@ -496,8 +534,10 @@
             updatePatientDataToMatchScreen,
             resetTimeSlots,
             handleTimeSlotHeadersChange,
-            initializeExistingPatients, // Expose the initialization method
         };
     })();
 
 })(window);
+
+
+
