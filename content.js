@@ -1,247 +1,16 @@
-let debug = true; // Initial debug state
 let isActive = true; // Extension starts deactivated
 let globalTimeSlots = [];
 let pollingInterval = null;
 let previousPatientNames = new Set();
 
-const logDebug = (message, ...args) => {
-    /**
-     * Logs messages to the console if debug mode is enabled.
-     * @param {string} message - The message to log.
-     * @param  {...any} args - Additional arguments.
-     */
-    if (debug) {
-        console.log(`[AudioManager] ${message}`, ...args);
-    }
-};
+// Ensure your namespace exists
+window.VR_Mon_App = window.VR_Mon_App || {};
 
-const AudioManager = (function () {
-    let isPlaying = false;
-    const chimeQueue = [];
-    let cachedSoundFiles = {};
-    let cachedVolume = 0.5; // Default master volume
-    let cachedLibraryVolumes = {}; // Per-sound volume settings
+// Set the window.debug variable in the global scope
+window.debug = true;
 
-    const MAX_QUEUE_SIZE = 20;
-
-    /**
-     * Loads and caches the selected sounds and volume.
-     */
-    const loadSounds = () => {
-        chrome.storage.local.get(['soundFileDiagnostics', 'soundFileMedication', 'soundFileNursingCare', 'soundFilePatientAdded', 'soundFilePatientRemoved', 'chimeVolume'], result => {
-            // Load custom sounds if available, otherwise use defaults
-            cachedSoundFiles = {
-                diagnostics:
-                    result.soundFileDiagnostics ||
-                    chrome.runtime.getURL('3_tone_chime-99718.mp3'), // Default for Diagnostics
-                medication:
-                    result.soundFileMedication ||
-                    chrome.runtime.getURL('mixkit-bell-notification-933.mp3'), // Default for Medication
-                nursingCare:
-                    result.soundFileNursingCare ||
-                    chrome.runtime.getURL('mixkit-doorbell-single-press-333.mp3'), // Default for Nursing Care
-                patientAdded:
-                    result.soundFilePatientAdded ||
-                    chrome.runtime.getURL('BuddyIn.mp3'), // Default for Patient Added
-                patientRemoved:
-                    result.soundFilePatientRemoved ||
-                    chrome.runtime.getURL('Goodbye.mp3'), // Default for Patient Removed
-            };
-
-            cachedVolume =
-                result.chimeVolume !== undefined ? result.chimeVolume : 0.5;
-
-            logDebug('Sounds loaded:', cachedSoundFiles);
-            logDebug('Master Chime volume:', cachedVolume);
-            // Preload audio
-            preloadAudio();
-        });
-    };
-
-    /**
-     * Loads and caches per-sound volume settings.
-     */
-    const loadLibraryVolumes = () => {
-        // Assuming per-sound volumes are named as 'volumeLibraryDiagnostics', etc.
-        const volumeKeys = ['volumeLibraryDiagnostics', 'volumeLibraryMedication', 'volumeLibraryNursingCare', 'volumeLibraryPatientAdded', 'volumeLibraryPatientRemoved'];
-        chrome.storage.local.get(volumeKeys, (result) => {
-            for (const key of volumeKeys) {
-                cachedLibraryVolumes[key.replace('volumeLibrary', '').toLowerCase()] = result[key] !== undefined ? result[key] : 1.0;
-            }
-            logDebug('Per-sound volumes loaded:', cachedLibraryVolumes);
-        });
-    };
-
-    /**
-     * Preloads the audio files to reduce playback latency.
-     */
-    const preloadAudio = () => {
-        try {
-            // Preload each audio file
-            for (const key in cachedSoundFiles) {
-                const audioObj = new Audio();
-                audioObj.src = cachedSoundFiles[key];
-                audioObj.load();
-                cachedSoundFiles[key] = audioObj; // Store Audio objects instead of URLs
-                logDebug(`Audio preloaded for ${key}:`, cachedSoundFiles[key].src);
-            }
-        } catch (error) {
-            console.error('Error preloading audio:', error);
-        }
-    };
-
-    /**
-     * Plays a chime sound based on the soundType.
-     * @param {string} soundType - The type of sound to play ('diagnostics', 'medication', 'nursingCare', 'patientAdded', 'patientRemoved').
-     */
-    const playChime = (soundType) => {
-        if (chimeQueue.length >= MAX_QUEUE_SIZE) {
-            logDebug('Chime queue is full. Chime request ignored.');
-            return;
-        }
-        logDebug('playChime() called. isPlaying:', isPlaying, 'soundType:', soundType);
-
-        chimeQueue.push(() => {
-            return new Promise((resolve, reject) => {
-                // Use cached Audio objects
-                const audioObj =
-                    cachedSoundFiles[soundType] || cachedSoundFiles['diagnostics']; // Fallback to Diagnostics default
-
-                logDebug('Using audio object:', audioObj.src);
-                logDebug('Master volume set to:', cachedVolume);
-                logDebug('Per-sound volume set to:', cachedLibraryVolumes[soundType] || 1.0);
-
-                try {
-                    // Clone the Audio object to allow overlapping sounds
-                    const audioClone = audioObj.cloneNode();
-                    const perSoundVolume = cachedLibraryVolumes[soundType] || 1.0;
-                    audioClone.volume = cachedVolume * perSoundVolume;
-
-                    const playPromise = audioClone.play();
-                    if (playPromise !== undefined) {
-                        playPromise
-                            .then(() => {
-                                logDebug(`Chime sound started playing for ${soundType}.`);
-                            })
-                            .catch(error => {
-                                console.error('Error playing chime sound:', error);
-                                reject(error);
-                            });
-                    }
-
-                    audioClone.onended = () => {
-                        logDebug(`Chime sound finished playing for ${soundType}.`);
-                        resolve();
-                    };
-
-                    audioClone.onerror = event => {
-                        console.error('Audio playback error:', event);
-                        reject(event);
-                    };
-                } catch (error) {
-                    console.error('Error initializing audio:', error);
-                    reject(error);
-                }
-            });
-        });
-
-        if (!isPlaying) {
-            processQueue();
-        }
-    };
-
-    /**
-     * Processes the chime queue, ensuring that chimes are played sequentially.
-     */
-    const processQueue = () => {
-        if (chimeQueue.length === 0) {
-            isPlaying = false;
-            return;
-        }
-        isPlaying = true;
-        const nextChime = chimeQueue.shift();
-        nextChime()
-            .then(() => {
-                processQueue();
-            })
-            .catch(error => {
-                console.error('Error processing chime:', error);
-                processQueue(); // Continue processing the queue even if there's an error
-            });
-    };
-
-    /**
-     * Cleans up audio resources to prevent memory leaks.
-     */
-    const cleanup = () => {
-        chimeQueue.length = 0; // Clear the queue
-        isPlaying = false;
-        cachedSoundFiles = {};
-        cachedLibraryVolumes = {};
-        cachedVolume = 0.5; // Reset to default volume
-        logDebug('Audio resources have been cleaned up.');
-    };
-
-    /**
-     * Updates sound files and volume dynamically when storage changes.
-     */
-    const updateSoundsFromStorage = (changes, area) => {
-        if (area === 'local') {
-            let shouldPreload = false;
-
-            if (changes.soundFileDiagnostics) {
-                cachedSoundFiles.diagnostics = changes.soundFileDiagnostics.newValue || chrome.runtime.getURL('3_tone_chime-99718.mp3');
-                shouldPreload = true;
-            }
-            if (changes.soundFileMedication) {
-                cachedSoundFiles.medication = changes.soundFileMedication.newValue || chrome.runtime.getURL('mixkit-bell-notification-933.mp3');
-                shouldPreload = true;
-            }
-            if (changes.soundFileNursingCare) {
-                cachedSoundFiles.nursingCare = changes.soundFileNursingCare.newValue || chrome.runtime.getURL('mixkit-doorbell-single-press-333.mp3');
-                shouldPreload = true;
-            }
-            if (changes.soundFilePatientAdded) {
-                cachedSoundFiles.patientAdded = changes.soundFilePatientAdded.newValue || chrome.runtime.getURL('BuddyIn.mp3');
-                shouldPreload = true;
-            }
-            if (changes.soundFilePatientRemoved) {
-                cachedSoundFiles.patientRemoved = changes.soundFilePatientRemoved.newValue || chrome.runtime.getURL('Goodbye.mp3');
-                shouldPreload = true;
-            }
-            if (changes.chimeVolume) {
-                cachedVolume = changes.chimeVolume.newValue;
-                shouldPreload = true;
-            }
-
-            // Handle per-sound volume changes
-            const volumeKeys = Object.keys(cachedLibraryVolumes).map(key => `volumeLibrary${capitalizeFirstLetter(key)}`);
-            for (const key of volumeKeys) {
-                if (changes[key]) {
-                    const soundType = key.replace('volumeLibrary', '').toLowerCase();
-                    cachedLibraryVolumes[soundType] = changes[key].newValue;
-                    logDebug(`Per-sound volume updated for ${soundType}:`, changes[key].newValue);
-                }
-            }
-
-            if (shouldPreload) {
-                preloadAudio();
-            }
-        }
-    };
-
-    // Listen for changes in storage to update sounds and volume dynamically
-    chrome.storage.onChanged.addListener(updateSoundsFromStorage);
-
-    // Initialize by loading the sounds, master volume, and per-sound volumes
-    loadSounds();
-    loadLibraryVolumes();
-
-    return {
-        playChime,
-        cleanup,
-    };
-})();
+// Now use the AudioManager via your namespace
+const AudioManager = VR_Mon_App.AudioManager;
 
 // Patient data management module
 const PatientManager = (() => {
@@ -263,9 +32,9 @@ const PatientManager = (() => {
 			patientsData[patientName][category] = data;
 		}
 
-		if (debug) console.log(`Updated patient data for ${patientName}:`, patientsData[patientName]);
+		if (window.debug) console.log(`Updated patient data for ${patientName}:`, patientsData[patientName]);
 		// Logging the current state of patient data
-		//if (debug) console.log("Current state of all patient data:", patientsData);
+		//if (window.debug) console.log("Current state of all patient data:", patientsData);
 };
 
 
@@ -277,7 +46,7 @@ const PatientManager = (() => {
     };
 	const removePatientData = (patientName) => {
 		delete patientsData[patientName];
-		if (debug) console.log(`Patient data removed for ${patientName}`);
+		if (window.debug) console.log(`Patient data removed for ${patientName}`);
 	  };
 
     return {
@@ -302,14 +71,14 @@ const findTimeSlots = () => {
     // Step 1: Get the node with data-testid="PatientList"
     const patientListNode = document.querySelector('div[data-testid="PatientList"]');
     if (!patientListNode) {
-        if (debug) console.log("PatientList node not found.");
+        if (window.debug) console.log("PatientList node not found.");
         return timeSlots;
     }
 
     // Get the first child of the first child
     const startingNode = patientListNode.firstElementChild?.firstElementChild;
     if (!startingNode) {
-        if (debug) console.log("Starting node for time slots not found.");
+        if (window.debug) console.log("Starting node for time slots not found.");
         return timeSlots;
     }
 
@@ -334,7 +103,7 @@ const findTimeSlots = () => {
 
     searchTimeSlots(startingNode);
 
-    if (debug) console.log("Found time slots:", timeSlots);
+    if (window.debug) console.log("Found time slots:", timeSlots);
     globalTimeSlots = timeSlots;
     return timeSlots;
 };
@@ -369,7 +138,7 @@ function findPatientNameInChildren(element) {
 const findPatientName = (patientListItem) => {
     const avatarDiv = patientListItem.querySelector('div[aria-label="avatarWithMessage"]');
     if (!avatarDiv) {
-        if (debug) console.log("Avatar div not found for patientListItem:", patientListItem);
+        if (window.debug) console.log("Avatar div not found for patientListItem:", patientListItem);
         return null;
     }
 
@@ -391,7 +160,7 @@ const findPatientName = (patientListItem) => {
         }
     }
 
-    if (debug) console.log("No valid patient name found in this patient list item:", patientListItem);
+    if (window.debug) console.log("No valid patient name found in this patient list item:", patientListItem);
     return null;
 };
 
@@ -399,10 +168,10 @@ const findPatientName = (patientListItem) => {
 const initializePatientData = (patientName) => {
     const timeSlots = findTimeSlots();
     if (!timeSlots.length) {
-        if (debug) console.log(`No time slots found, skipping initialization for ${patientName}.`);
+        if (window.debug) console.log(`No time slots found, skipping initialization for ${patientName}.`);
         return;
     }
-    if (debug) console.log(`Initializing patient data for ${patientName} with time slots:`, timeSlots);
+    if (window.debug) console.log(`Initializing patient data for ${patientName} with time slots:`, timeSlots);
     const initialData = { criticalNotes: null, missed: null, due: null, timeSlots: {} };
     timeSlots.forEach(time => {
         if (!initialData.timeSlots[time]) {
@@ -450,14 +219,14 @@ const handlePatientDataUpdate = (node) => {
     // Find the Patient List Item node by recursively searching the sibling's children
     const patientListItemNode = findPatientListItemNode(node);
     if (!patientListItemNode) {
-        if (debug) console.log("Patient List Item node not found.");
+        if (window.debug) console.log("Patient List Item node not found.");
         return;
     }
 
     // The patient bar is the next sibling of the Patient List Item node
     const patientBar = patientListItemNode.nextElementSibling;
     if (!patientBar) {
-        if (debug) console.log(`Patient bar not found for node:`, node);
+        if (window.debug) console.log(`Patient bar not found for node:`, node);
         return;
     }
 
@@ -484,7 +253,7 @@ const handlePatientDataUpdate = (node) => {
     // Find the Critical Notes node
     const criticalNotesNode = findCriticalNotesNode(patientBar);
     if (!criticalNotesNode) {
-        if (debug) console.log("Critical notes node not found.");
+        if (window.debug) console.log("Critical notes node not found.");
         return;
     }
 
@@ -493,7 +262,7 @@ const handlePatientDataUpdate = (node) => {
     const dueNode = missedNode?.nextElementSibling;
 
     if (!missedNode || !dueNode) {
-        if (debug) console.log("Missed or Due nodes not found.");
+        if (window.debug) console.log("Missed or Due nodes not found.");
         return;
     }
 
@@ -519,9 +288,8 @@ const handlePatientDataUpdate = (node) => {
         timeSlotIndex++; // Increment the index for the next time slot
     }
 
-    if (debug) console.log(`Updated patient data for ${patientName}`);
+    if (window.debug) console.log(`Updated patient data for ${patientName}`);
 };
-
 
 // Generic function to search for a specific task type (e.g., Diagnostics, Medication, NursingCare) in the node
 const searchForTaskType = (node, taskType) => {
@@ -623,7 +391,7 @@ const updateTaskCountsForNode = (patientName, category, node) => {
         const timeSlotKey = globalTimeSlots[timeSlotIndex];
         
         if (!timeSlotKey) {
-            if (debug) console.log(`Time slot key ${timeSlotIndex} not found in globalTimeSlots`);
+            if (window.debug) console.log(`Time slot key ${timeSlotIndex} not found in globalTimeSlots`);
             return;
         }
 
@@ -685,12 +453,11 @@ const updateTaskCountsForNode = (patientName, category, node) => {
         });
     }
 
-    if (debug) console.log(`Counts updated for ${category}: Diagnostics=${currentDiagnosticsCount}, Medication=${currentMedicationCount}, Nursing Care=${currentNursingCareCount}`);
+    if (window.debug) console.log(`Counts updated for ${category}: Diagnostics=${currentDiagnosticsCount}, Medication=${currentMedicationCount}, Nursing Care=${currentNursingCareCount}`);
 };
 
-
 const handleTimeSlotHeadersChange = (timeSlotHeadersNode) => {
-    if (debug) console.log("Time slot headers changed:", timeSlotHeadersNode);
+    if (window.debug) console.log("Time slot headers changed:", timeSlotHeadersNode);
 
     // Collect the new time slots from the headers
     const newTimeSlots = [];
@@ -702,7 +469,7 @@ const handleTimeSlotHeadersChange = (timeSlotHeadersNode) => {
         }
     });
 
-    if (debug) console.log("New time slots found:", newTimeSlots);
+    if (window.debug) console.log("New time slots found:", newTimeSlots);
 
     // Get the old time slots
     const oldTimeSlots = [...globalTimeSlots];
@@ -718,7 +485,7 @@ const handleTimeSlotHeadersChange = (timeSlotHeadersNode) => {
 
     // Handle removed time slots
     if (removedTimeSlots.length > 0) {
-        if (debug) console.log("Removed time slots:", removedTimeSlots);
+        if (window.debug) console.log("Removed time slots:", removedTimeSlots);
 
         // For each patient, remove the diagnostics for the missing time slots
         const allPatients = PatientManager.getAllPatientData();
@@ -728,12 +495,12 @@ const handleTimeSlotHeadersChange = (timeSlotHeadersNode) => {
             });
         });
 
-        if (debug) console.log("Removed time slots from patient data.");
+        if (window.debug) console.log("Removed time slots from patient data.");
     }
 
     // Handle added time slots
     if (addedTimeSlots.length > 0) {
-        if (debug) console.log("Added time slots:", addedTimeSlots);
+        if (window.debug) console.log("Added time slots:", addedTimeSlots);
 
         // For each patient, initialize the new time slots with diagnostics count set to 0
         const allPatients = PatientManager.getAllPatientData();
@@ -745,17 +512,17 @@ const handleTimeSlotHeadersChange = (timeSlotHeadersNode) => {
 		// Trigger an update to refresh the patient data with the new time slots
 		updatePatientDataToMatchScreen();
 
-        if (debug) console.log("Added new time slots to patient data.");
+        if (window.debug) console.log("Added new time slots to patient data.");
     }
 
     // Log the updated global time slots
-    if (debug) console.log("Updated global time slots:", globalTimeSlots);
+    if (window.debug) console.log("Updated global time slots:", globalTimeSlots);
 };
 
 // Utility functions
 const getPatientList = () => {
     cachedPatientList = document.querySelector('div[data-testid="PatientList"]');
-    if (debug) console.log("Cached patient list:", cachedPatientList);
+    if (window.debug) console.log("Cached patient list:", cachedPatientList);
     return cachedPatientList; // Only re-fetch if cache is null
 };
 
@@ -763,7 +530,7 @@ const getPatientList = () => {
 const updatePatientDataToMatchScreen = () => {
     const patientList = getPatientList();
     if (!patientList) {
-        if (debug) console.log("Patient list not found.");
+        if (window.debug) console.log("Patient list not found.");
         return;
     }
 
@@ -788,20 +555,20 @@ const updatePatientDataToMatchScreen = () => {
     addedPatients.forEach(patientName => {
         initializePatientData(patientName); // Initialize patient data
         AudioManager.playChime('patientAdded'); // Play 'BuddyIn.mp3'
-        if (debug) console.log(`Patient added: ${patientName}`);
+        if (window.debug) console.log(`Patient added: ${patientName}`);
     });
 
     // Handle removed patients
     removedPatients.forEach(patientName => {
         PatientManager.removePatientData(patientName); // Remove patient data
         AudioManager.playChime('patientRemoved'); // Play 'Goodbye.mp3'
-        if (debug) console.log(`Patient removed: ${patientName}`);
+        if (window.debug) console.log(`Patient removed: ${patientName}`);
     });
 
     // Update the previous patient names set
     previousPatientNames = currentPatientNames;
 
-    if (debug) console.log("Patient data and Time Slots updated to match the current screen.");
+    if (window.debug) console.log("Patient data and Time Slots updated to match the current screen.");
 };
 
 const resetTimeSlots = () => {
@@ -813,8 +580,8 @@ chrome.runtime.onMessage.addListener((request) => {
     if (request.message === "playTestChime") {
         AudioManager.playChime(); // Reuse the AudioManager's playChime
     } else if (request.message === "toggleDebug") {
-        debug = request.debug;
-        console.log("Debug mode set to:", debug);
+        window.debug = request.window.debug;
+        console.log("window.debug mode set to:", window.debug);
     } else if (request.message === "updatePatientData") {
         updatePatientDataToMatchScreen();
     } else if (request.message === "outputPatientLists") {
@@ -823,14 +590,14 @@ chrome.runtime.onMessage.addListener((request) => {
 		PatientManager.clearAllPatientData();
 		resetTimeSlots();
 		resetCachedPatientList();
-		if (debug) console.log("All patient data has been cleared.");
+		if (window.debug) console.log("All patient data has been cleared.");
 	} else if (request.message === "toggleExtensionState") {
          isActive = request.state;
         if (isActive) {
-            if (debug) console.log("Extension activated. Starting polling.");
+            if (window.debug) console.log("Extension activated. Starting polling.");
             startPolling();
         } else {
-            if (debug) console.log("Extension deactivated. Stopping polling.");
+            if (window.debug) console.log("Extension deactivated. Stopping polling.");
             stopPolling();
         }
     } else {
@@ -843,7 +610,7 @@ const startPolling = () => {
         pollingInterval = setInterval(() => {
             updatePatientDataToMatchScreen();
         }, 2000); // Adjust the interval as needed
-        if (debug) console.log("Started polling for patient data updates.");
+        if (window.debug) console.log("Started polling for patient data updates.");
     }
 };
 
@@ -851,24 +618,24 @@ const stopPolling = () => {
     if (pollingInterval) {
         clearInterval(pollingInterval);
         pollingInterval = null;
-        if (debug) console.log("Stopped polling for patient data updates.");
+        if (window.debug) console.log("Stopped polling for patient data updates.");
     }
 };
 
-/**
- * Initializes the extension's active state and starts polling if active.
- */
 const initializeExtensionState = () => {
+/**
+* Initializes the extension's active state and starts polling if active.
+*/
     chrome.storage.local.get(['isActive'], (result) => {
         isActive = result.isActive !== undefined ? result.isActive : true; // Default to true if not set
         if (isActive) {
             startPolling();
-            if (debug) console.log("Extension is active. Polling started on load.");
+            if (window.debug) console.log("Extension is active. Polling started on load.");
         }
 		
-		// Optionally, set debug mode based on stored value
-        if (debug) {
-            console.log("Debug mode is enabled.");
+		// Optionally, set window.debug mode based on stored value
+        if (window.debug) {
+            console.log("window.debug mode is enabled.");
         }
     });
 };
