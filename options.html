@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Extension Settings</title>
+    <title>Vet Radar Extension Options</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -190,22 +190,25 @@
 
         <!-- Notification Sound -->
         <div class="sound-row">
-            <input type="checkbox" id="enableNotification" checked>
-            <label for="enableNotification">Notification Sound</label>
-            <select id="libraryNotification">
-                <option value="default_notification.mp3">Default Notification</option>
-                <option value="predefined-sound1.mp3">Predefined Sound 1</option>
-                <option value="predefined-sound2.mp3">Predefined Sound 2</option>
-            </select>
+            <input type="checkbox" id="enableExamRoomNotification" checked>
+            <label for="enableExamRoomNotification">Exam Room Notification Sound</label>
+            <select id="libraryExamRoomNotification">
+				<option value="3_tone_chime-99718.mp3">3 Tone Chime</option>
+				<option value="BuddyIn.mp3">Buddy In</option>
+				<option value="Goodbye.mp3">Goodbye</option>
+				<option value="simple-notification-152054.mp3">Simple Notification</option>
+				<option value="mixkit-doorbell-single-press-333.mp3">Doorbell Single Press</option>
+				<option value="mixkit-bell-notification-933.mp3">Bell Notification</option>
+			</select>
             <div class="volume-slider">
-                <input type="range" id="volumeLibraryNotification" min="0" max="1" step="0.05" value="0.5">
-                <span id="volumeLibraryNotificationValue">50%</span>
+                <input type="range" id="volumeLibraryExamRoomNotification" min="0" max="1" step="0.05" value="0.5">
+                <span id="volumeLibraryExamRoomNotificationValue">50%</span>
             </div>
-            <div class="dropzone" id="dropzoneNotification" tabindex="0">
+            <div class="dropzone" id="dropzoneExamRoomNotification" tabindex="0">
                 Drag & drop or click to select a file
             </div>
-            <button class="reset-button" id="resetNotification">Reset</button>
-            <button id="playLibraryNotification">Play</button>
+            <button class="reset-button" id="resetExamRoomNotification">Reset</button>
+            <button id="playLibraryExamRoomNotification">Play</button>
         </div>
 
         <!-- Patient Added Sound -->
@@ -214,8 +217,11 @@
             <label for="enablePatientAdded">Patient Added Sound</label>
             <select id="libraryPatientAdded">
                 <option value="BuddyIn.mp3">Buddy In</option>
-                <option value="predefined-sound3.mp3">Predefined Sound 3</option>
-                <option value="predefined-sound4.mp3">Predefined Sound 4</option>
+				<option value="Goodbye.mp3">Goodbye</option>
+				<option value="3_tone_chime-99718.mp3">3 Tone Chime</option>
+				<option value="simple-notification-152054.mp3">Simple Notification</option>
+				<option value="mixkit-doorbell-single-press-333.mp3">Doorbell Single Press</option>
+				<option value="mixkit-bell-notification-933.mp3">Bell Notification</option>
             </select>
             <div class="volume-slider">
                 <input type="range" id="volumeLibraryPatientAdded" min="0" max="1" step="0.05" value="0.5">
@@ -234,8 +240,11 @@
             <label for="enablePatientRemoved">Patient Removed Sound</label>
             <select id="libraryPatientRemoved">
                 <option value="Goodbye.mp3">Goodbye</option>
-                <option value="predefined-sound5.mp3">Predefined Sound 5</option>
-                <option value="predefined-sound6.mp3">Predefined Sound 6</option>
+				<option value="BuddyIn.mp3">Buddy In</option>
+				<option value="3_tone_chime-99718.mp3">3 Tone Chime</option>
+				<option value="simple-notification-152054.mp3">Simple Notification</option>
+				<option value="mixkit-doorbell-single-press-333.mp3">Doorbell Single Press</option>
+				<option value="mixkit-bell-notification-933.mp3">Bell Notification</option>
             </select>
             <div class="volume-slider">
                 <input type="range" id="volumeLibraryPatientRemoved" min="0" max="1" step="0.05" value="0.5">
@@ -255,6 +264,10 @@
         <button class="restore-button" id="restoreDefaults">Restore All Defaults</button>
     </div>
 
-    <script src="options.js"></script>
+    <script src="options_data.js"></script>
+    <script src="options_util.js"></script>
+    <script src="options_functions.js"></script>
+    <script src="options_event_listeners.js"></script>
+    <script src="options_main.js"></script>
 </body>
 </html>
