@@ -11,18 +11,15 @@
     "storage",
 	"scripting"
   ],
+    "icons": {
+    "48": "icon48_on.png",
+    "128": "icon128.png"
+  },
   "action": {
     "default_icon": {
-
-	  "48" : "icon48_off.png"
+  	"48": "icon48_on.png"
     },
-	"default_title": "Vet Radar Extension"
-  },
-  "icons": {
-    "48" : "icon48_off.png",
-    "48" : "icon48_on.png",
-	"128": "icon128.png"
-
+    "default_title": "Vet Radar Extension"
   },
   "web_accessible_resources": [
     {
@@ -33,8 +30,6 @@
         "mixkit-bell-notification-933.mp3",
         "BuddyIn.mp3",
         "Goodbye.mp3"
-
-
       ],
       "matches": ["https://app.vetradar.com/*"]
     }

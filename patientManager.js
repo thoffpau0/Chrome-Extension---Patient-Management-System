@@ -17,15 +17,15 @@
             // Return the URL based on the type
             switch (type) {
                 case 'diagnostics':
-                    return chrome.runtime.getURL("diagnostics_doorbell.mp3"); // Replace with your actual file
+                    return chrome.runtime.getURL("3_tone_chime-99718.mp3"); // Replace with your actual file
                 case 'patientAdded':
                     return chrome.runtime.getURL("BuddyIn.mp3"); // Replace with your actual file
                 case 'patientRemoved':
                     return chrome.runtime.getURL("Goodbye.mp3"); // Replace with your actual file
                 case 'examRoomNotification':
-                    return chrome.runtime.getURL("exam_room_notification.mp3"); // Replace with your actual file
+                    return chrome.runtime.getURL("3_tone_chime-99718.mp3"); // Replace with your actual file
                 default:
-                    return chrome.runtime.getURL("diagnostics_doorbell.mp3"); // Default sound
+                    return chrome.runtime.getURL("3_tone_chime-99718.mp3"); // Default sound
             }
         }
     };
@@ -46,6 +46,81 @@
                 console.log(`[PatientManager] ${message}`, ...args);
             }
         };
+
+		// Initial load of settings
+		function loadSettings() {
+			chrome.storage.local.get(['chimeVolume', 'patientAddedVolume', 'patientRemovedVolume', 'examRoomNotificationVolume', 'enablePatientAdded', 'enablePatientRemoved','enableExamRoomNotification'], function (result) {
+				// Initialize your variables with the settings
+				var chimeVolume = result.chimeVolume !== undefined ? result.chimeVolume : 0.5;
+				var patientAddedVolume = result.patientAddedVolume !== undefined ? result.patientAddedVolume : 1.0;
+				var patientRemovedVolume = result.patientRemovedVolume !== undefined ? result.patientRemovedVolume : 1.0;
+				var examRoomNotificationVolume = result.examRoomNotificationVolume !== undefined ? result.examRoomNotificationVolume : 1.0;
+				var enablePatientAdded = result.enablePatientAdded !== false; // Default to true if undefined
+				var enablePatientRemoved = result.enablePatientRemoved !== false; // Default to true if undefined
+				var enableExamRoomNotification = result.enableExamRoomNotification !== false; // Default to true if undefined
+
+				// Update your variables or state accordingly
+				// For example:
+				window.chimeVolume = chimeVolume;
+				window.patientAddedVolume = patientAddedVolume;
+				window.patientRemovedVolume = patientRemovedVolume;
+				window.examRoomNotificationVolume = examRoomNotificationVolume;
+				window.enablePatientAdded = enablePatientAdded;
+				window.enablePatientRemoved = enablePatientRemoved;
+				window.enableExamRoomNotification = enableExamRoomNotification;
+
+				console.log('Settings loaded:', {
+					chimeVolume,
+					patientAddedVolume,
+					patientRemovedVolume,
+					examRoomNotificationVolume,
+					enablePatientAdded,
+					enablePatientRemoved,
+					enableExamRoomNotification,
+				});
+			});
+		}
+
+		// Listen for changes in storage
+		chrome.storage.onChanged.addListener(function (changes, areaName) {
+			if (areaName === 'local') {
+				console.log('Storage changes detected:', changes);
+
+				// Update variables based on changes
+				if (changes.chimeVolume) {
+					window.chimeVolume = changes.chimeVolume.newValue;
+					console.log('Updated chimeVolume:', window.chimeVolume);
+				}
+				if (changes.patientAddedVolume) {
+					window.patientAddedVolume = changes.patientAddedVolume.newValue;
+					console.log('Updated patientAddedVolume:', window.patientAddedVolume);
+				}
+				if (changes.patientRemovedVolume) {
+					window.patientRemovedVolume = changes.patientRemovedVolume.newValue;
+					console.log('Updated patientRemovedVolume:', window.patientRemovedVolume);
+				}
+				if (changes.examRoomNotificationVolume) {
+					window.examRoomNotificationVolume = changes.examRoomNotificationVolume.newValue;
+					console.log('Updated examRoomNotificationVolume:', window.examRoomNotificationVolume);
+				}
+				if (changes.enablePatientAdded) {
+					window.enablePatientAdded = changes.enablePatientAdded.newValue;
+					console.log('Updated enablePatientAdded:', window.enablePatientAdded);
+				}
+				if (changes.enablePatientRemoved) {
+					window.enablePatientRemoved = changes.enablePatientRemoved.newValue;
+					console.log('Updated enablePatientRemoved:', window.enablePatientRemoved);
+				}
+				if (changes.enableExamRoomNotification) {
+					window.enableExamRoomNotification = changes.enableExamRoomNotification.newValue;
+					console.log('Updated enableExamRoomNotification:', window.enableExamRoomNotification);
+				}
+				// If there are other settings, handle them here
+			}
+		});
+
+		// Call loadSettings when the content script is first executed
+		loadSettings();
 
         /**
          * Gets the patient list element.
