@@ -127,35 +127,6 @@ chrome.storage.onChanged.addListener(function (changes, areaName) {
     }
 });
 
-// Handle context menu clicks
-chrome.contextMenus.onClicked.addListener((info, tab) => {
-    switch (info.menuItemId) {
-        case "playTestSound":
-            chrome.storage.local.get(['soundFileDiagnostics'], (result) => {
-                const soundFileURL = result.soundFileDiagnostics || chrome.runtime.getURL("3_tone_chime-99718.mp3");
-                chrome.tabs.sendMessage(tab.id, { message: "playTestChime", soundFile: soundFileURL });
-            });
-            break;
-        case "toggleDebug":
-            toggleDebug(tab.id);
-            break;
-        case "outputPatientList":
-            sendMessageToTab(tab.id, { message: "outputPatientLists" });
-            break;
-        case "reinitializePatientList":
-            sendMessageToTab(tab.id, { message: "reinitializeAndOutputPatientList" });
-            break;
-        case "updatePatientData":
-            sendMessageToTab(tab.id, { message: "updatePatientData" });
-            break;
-        case "clearPatientData":
-            sendMessageToTab(tab.id, { message: "clearPatientData" });
-            break;
-        default:
-            console.warn("Unknown context menu item clicked:", info.menuItemId);
-    }
-});
-
 // Listen for messages
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.message === "toggleExtensionState") {
@@ -170,62 +141,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 });
 
-// Initialize the extension's active state and set up context menus on install
+// Initialize the extension's active state on install
 chrome.runtime.onInstalled.addListener(() => {
-    // Create the context menu items
-    chrome.contextMenus.create({
-        id: "playTestSound",
-        title: "Play Test Sound",
-        contexts: ["action"]
-    });
-
-    chrome.contextMenus.create({
-        id: "debugMenu",
-        title: "Debug",
-        contexts: ["all"],
-        documentUrlPatterns: ["https://app.vetradar.com/*"]
-    });
-
-    chrome.contextMenus.create({
-        id: "outputPatientList",
-        parentId: "debugMenu",
-        title: "Output Current Patient Lists to Console",
-        contexts: ["all"],
-        documentUrlPatterns: ["https://app.vetradar.com/*"]
-    });
-
-    chrome.contextMenus.create({
-        id: "reinitializePatientList",
-        parentId: "debugMenu",
-        title: "Reinitialize and Output Patient List",
-        contexts: ["all"],
-        documentUrlPatterns: ["https://app.vetradar.com/*"]
-    });
-
-    chrome.contextMenus.create({
-        id: "toggleDebug",
-        parentId: "debugMenu",
-        title: "Toggle Debug Mode",
-        contexts: ["all"],
-        documentUrlPatterns: ["https://app.vetradar.com/*"]
-    });
-
-    chrome.contextMenus.create({
-        id: "updatePatientData",
-        parentId: "debugMenu",
-        title: "Update Patient Data to Match Screen",
-        contexts: ["all"],
-        documentUrlPatterns: ["https://app.vetradar.com/*"]
-    });
-
-    chrome.contextMenus.create({
-        id: "clearPatientData",
-        parentId: "debugMenu",
-        title: "Clear Patient Data",
-        contexts: ["all"],
-        documentUrlPatterns: ["https://app.vetradar.com/*"]
-    });
-
     // Retrieve and initialize the state from storage if available
     chrome.storage.local.get(['isActive', 'debug'], (result) => {
         if (result.isActive === undefined) {
