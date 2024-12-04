@@ -16,8 +16,6 @@
         getSoundFileURL: (type) => {
             // Return the URL based on the type
             switch (type) {
-                case 'diagnostics':
-                    return chrome.runtime.getURL("3_tone_chime-99718.mp3"); // Replace with your actual file
                 case 'patientAdded':
                     return chrome.runtime.getURL("BuddyIn.mp3"); // Replace with your actual file
                 case 'patientRemoved':
@@ -382,7 +380,7 @@
 
 			// If a new notification is detected and the patient is in an exam room, play the sound
 			if (hasNotification && !currentCategoryStatus && isInExamRoom) {
-				AudioManager.playChime('diagnostics');
+				AudioManager.playChime('examRoomNotification');
             }
 
             // Update patient data
