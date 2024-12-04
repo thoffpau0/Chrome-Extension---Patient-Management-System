@@ -1,6 +1,15 @@
 // background.js
 let debug = true; // Initial debug state
 
+// Variables to hold settings
+let chimeVolume = 0.5;
+let patientAddedVolume = 1.0;
+let patientRemovedVolume = 1.0;
+let examRoomNotificationVolume = 1.0;
+let enablePatientAdded = true;
+let enablePatientRemoved = true;
+let enableExamRoomNotification = true;
+
 // Function to update the browser action icon based on the extension state
 function updateIcon(isActive) {
     const iconPath = isActive ? "icon48_on.png" : "icon48_off.png";
@@ -18,6 +27,8 @@ function sendMessageToTab(tabId, message) {
     chrome.tabs.sendMessage(tabId, message, (response) => {
         if (chrome.runtime.lastError) {
             console.error("Failed to send message to tab:", chrome.runtime.lastError.message);
+        } else {
+            if (debug) console.log(`Message sent to tab ${tabId}:`, message);
         }
     });
 }
@@ -35,6 +46,7 @@ function toggleDebug(tabId) {
         const currentDebug = result.debug !== undefined ? result.debug : false;
         const newDebug = !currentDebug;
         chrome.storage.local.set({ debug: newDebug }, () => {
+            debug = newDebug;
             sendMessageToTab(tabId, { message: "toggleDebug", debug: newDebug });
             console.log("Debug mode is now", newDebug ? "enabled" : "disabled");
         });
@@ -55,36 +67,26 @@ function toggleExtension() {
     });
 }
 
-// Initial load of settings
+// Function to load settings from storage
 function loadSettings() {
     chrome.storage.local.get(['chimeVolume', 'patientAddedVolume', 'patientRemovedVolume', 'examRoomNotificationVolume', 'enablePatientAdded', 'enablePatientRemoved','enableExamRoomNotification'], function (result) {
         // Initialize your variables with the settings
-        var chimeVolume = result.chimeVolume !== undefined ? result.chimeVolume : 0.5;
-        var patientAddedVolume = result.patientAddedVolume !== undefined ? result.patientAddedVolume : 1.0;
-        var patientRemovedVolume = result.patientRemovedVolume !== undefined ? result.patientRemovedVolume : 1.0;
-		var examRoomNotificationVolume = result.examRoomNotificationVolume !== undefined ? result.examRoomNotificationVolume : 1.0;
-        var enablePatientAdded = result.enablePatientAdded !== false; // Default to true if undefined
-        var enablePatientRemoved = result.enablePatientRemoved !== false; // Default to true if undefined
-		var enableExamRoomNotification = result.enableExamRoomNotification !== false; // Default to true if undefined
-
-        // Update your variables or state accordingly
-        // For example:
-        window.chimeVolume = chimeVolume;
-        window.patientAddedVolume = patientAddedVolume;
-        window.patientRemovedVolume = patientRemovedVolume;
-		window.examRoomNotificationVolume = examRoomNotificationVolume;
-        window.enablePatientAdded = enablePatientAdded;
-        window.enablePatientRemoved = enablePatientRemoved;
-		window.enableExamRoomNotification = enableExamRoomNotification;
+        chimeVolume = result.chimeVolume !== undefined ? result.chimeVolume : 0.5;
+        patientAddedVolume = result.patientAddedVolume !== undefined ? result.patientAddedVolume : 1.0;
+        patientRemovedVolume = result.patientRemovedVolume !== undefined ? result.patientRemovedVolume : 1.0;
+        examRoomNotificationVolume = result.examRoomNotificationVolume !== undefined ? result.examRoomNotificationVolume : 1.0;
+        enablePatientAdded = result.enablePatientAdded !== false; // Default to true if undefined
+        enablePatientRemoved = result.enablePatientRemoved !== false; // Default to true if undefined
+        enableExamRoomNotification = result.enableExamRoomNotification !== false; // Default to true if undefined
 
         console.log('Settings loaded:', {
             chimeVolume,
             patientAddedVolume,
             patientRemovedVolume,
-			examRoomNotificationVolume,
+            examRoomNotificationVolume,
             enablePatientAdded,
             enablePatientRemoved,
-			enableExamRoomNotification,
+            enableExamRoomNotification,
         });
     });
 }
@@ -96,32 +98,32 @@ chrome.storage.onChanged.addListener(function (changes, areaName) {
 
         // Update variables based on changes
         if (changes.chimeVolume) {
-            window.chimeVolume = changes.chimeVolume.newValue;
-            console.log('Updated chimeVolume:', window.chimeVolume);
+            chimeVolume = changes.chimeVolume.newValue;
+            console.log('Updated chimeVolume:', chimeVolume);
         }
         if (changes.patientAddedVolume) {
-            window.patientAddedVolume = changes.patientAddedVolume.newValue;
-            console.log('Updated patientAddedVolume:', window.patientAddedVolume);
+            patientAddedVolume = changes.patientAddedVolume.newValue;
+            console.log('Updated patientAddedVolume:', patientAddedVolume);
         }
         if (changes.patientRemovedVolume) {
-            window.patientRemovedVolume = changes.patientRemovedVolume.newValue;
-            console.log('Updated patientRemovedVolume:', window.patientRemovedVolume);
+            patientRemovedVolume = changes.patientRemovedVolume.newValue;
+            console.log('Updated patientRemovedVolume:', patientRemovedVolume);
         }
-		if (changes.examRoomNotificationVolume) {
-            window.examRoomNotificationVolume = changes.examRoomNotificationVolume.newValue;
-            console.log('Updated examRoomNotificationVolume:', window.examRoomNotificationVolume);
+        if (changes.examRoomNotificationVolume) {
+            examRoomNotificationVolume = changes.examRoomNotificationVolume.newValue;
+            console.log('Updated examRoomNotificationVolume:', examRoomNotificationVolume);
         }
         if (changes.enablePatientAdded) {
-            window.enablePatientAdded = changes.enablePatientAdded.newValue;
-            console.log('Updated enablePatientAdded:', window.enablePatientAdded);
+            enablePatientAdded = changes.enablePatientAdded.newValue;
+            console.log('Updated enablePatientAdded:', enablePatientAdded);
         }
         if (changes.enablePatientRemoved) {
-            window.enablePatientRemoved = changes.enablePatientRemoved.newValue;
-            console.log('Updated enablePatientRemoved:', window.enablePatientRemoved);
+            enablePatientRemoved = changes.enablePatientRemoved.newValue;
+            console.log('Updated enablePatientRemoved:', enablePatientRemoved);
         }
-		if (changes.enableExamRoomNotification) {
-            window.enableExamRoomNotification = changes.enableExamRoomNotification.newValue;
-            console.log('Updated enableExamRoomNotification:', window.enableExamRoomNotification);
+        if (changes.enableExamRoomNotification) {
+            enableExamRoomNotification = changes.enableExamRoomNotification.newValue;
+            console.log('Updated enableExamRoomNotification:', enableExamRoomNotification);
         }
         // If there are other settings, handle them here
     }
@@ -183,5 +185,5 @@ chrome.action.onClicked.addListener(() => {
     toggleExtension();
 });
 
-// Call loadSettings when the content script is first executed
+// Call loadSettings when the background script is first executed
 loadSettings();
