@@ -9,21 +9,22 @@
     // Define the AudioManager if not already defined
     global.VR_Mon_App.AudioManager = global.VR_Mon_App.AudioManager || {
         playChime: (type) => {
-            // Implement the chime playing logic here
-            const audio = new Audio(global.VR_Mon_App.AudioManager.getSoundFileURL(type));
-            audio.play();
+            const url = global.VR_Mon_App.AudioManager.getSoundFileURL(type);
+            if (!url) return;
+            const audio = new Audio(url);
+            audio.play().catch(err => console.error('[PatientManager] Fallback audio play failed:', err));
         },
         getSoundFileURL: (type) => {
-            // Return the URL based on the type
-            switch (type) {
-                case 'patientAdded':
-                    return chrome.runtime.getURL("BuddyIn.mp3"); // Replace with your actual file
-                case 'patientRemoved':
-                    return chrome.runtime.getURL("Goodbye.mp3"); // Replace with your actual file
-                case 'examRoomNotification':
-                    return chrome.runtime.getURL("3_tone_chime-99718.mp3"); // Replace with your actual file
-                default:
-                    return chrome.runtime.getURL("3_tone_chime-99718.mp3"); // Default sound
+            try {
+                switch (type) {
+                    case 'patientAdded':      return chrome.runtime.getURL('BuddyIn.mp3');
+                    case 'patientRemoved':    return chrome.runtime.getURL('Goodbye.mp3');
+                    case 'examRoomNotification': return chrome.runtime.getURL('3_tone_chime-99718.mp3');
+                    default:                  return chrome.runtime.getURL('3_tone_chime-99718.mp3');
+                }
+            } catch (e) {
+                console.error('[PatientManager] Cannot get sound URL (context invalidated?):', e);
+                return '';
             }
         }
     };
@@ -254,11 +255,7 @@
          */
         const initializePatientData = (patientName, inExamRoom = false) => {
             const timeSlots = findTimeSlots();
-            if (!timeSlots.length) {
-                logDebug(`No time slots found, skipping initialization for ${patientName}.`);
-                return;
-            }
-
+            // Initialize even if no time slots yet — they'll be added on the next observation cycle
             logDebug(`Initializing patient data for ${patientName} with time slots:`, timeSlots);
             const initialData = {
                 InExamRoom: inExamRoom,
@@ -423,8 +420,14 @@
                 return;
             }
 
+            const firstBarChild = patientBar.children[0];
+            if (!firstBarChild) {
+                logDebug(`Patient bar has no children for node:`, node);
+                return;
+            }
+
             // Correctly retrieve nested child nodes
-            const childNodes = Array.from(patientBar.children[0].children);
+            const childNodes = Array.from(firstBarChild.children);
             const categories = ['criticalNotes', 'missed', 'due'];
 
             // Iterate over the child nodes
@@ -447,32 +450,29 @@
 		 * Updates patient data to match the current screen.
 		 */
 		const updatePatientDataToMatchScreen = () => {
-			const patientList = getPatientList();
-			if (!patientList) {
-				logDebug("Patient list not found.");
-				return;
-			}
+			try {
+				const patientList = getPatientList();
+				if (!patientList) {
+					logDebug("Patient list not found.");
+					return;
+				}
 
-			findTimeSlots();
+				findTimeSlots();
 
-			const currentPatientNames = new Set();
-			const patientCards = Array.from(patientList.querySelectorAll('div[aria-label="Patient List Item"]'));
+				const currentPatientNames = new Set();
+				const patientCards = Array.from(patientList.querySelectorAll('div[aria-label="Patient List Item"]'));
 
-			// Iterate through each patient card to collect current patient names
-			patientCards.forEach(patientCard => {
-				const patientInfo = findPatientName(patientCard);
-				if (patientInfo) {
+				patientCards.forEach(patientCard => {
+					const patientInfo = findPatientName(patientCard);
+					if (!patientInfo) return;
+
 					const { name, InExamRoom } = patientInfo;
 					currentPatientNames.add(name);
 
 					if (patientsData[name]) {
-						// Update InExamRoom status
 						patientsData[name].InExamRoom = InExamRoom;
 					} else {
-						// Initialize patient data with InExamRoom status
 						initializePatientData(name, InExamRoom);
-						
-						// **Conditional Chime: Play only if InExamRoom is true**
 						if (InExamRoom) {
 							AudioManager.playChime('patientAdded');
 							logDebug(`Patient added (InExamRoom): ${name}`);
@@ -480,42 +480,37 @@
 							logDebug(`Patient added (Not in ExamRoom): ${name}`);
 						}
 					}
-				}
-			});
+				});
 
-			// Determine removed patients by comparing previous and current patient names
-			const removedPatients = new Set([...previousPatientNames].filter(x => !currentPatientNames.has(x)));
+				const removedPatients = new Set([...previousPatientNames].filter(x => !currentPatientNames.has(x)));
 
-			// Handle removed patients
-			removedPatients.forEach(patientName => {
-				const wasInExamRoom = patientsData[patientName]?.InExamRoom; // **Capture InExamRoom before removal**
-				
-				removePatientData(patientName);
-				
-				// **Conditional Chime: Play only if wasInExamRoom was true**
-				if (wasInExamRoom) {
-					AudioManager.playChime('patientRemoved');
-					logDebug(`Patient removed (Was in ExamRoom): ${patientName}`);
-				} else {
-					logDebug(`Patient removed (Was not in ExamRoom): ${patientName}`);
-				}
-			});
-
-			// Handle updates for existing patients who are in exam rooms
-			patientCards.forEach(patientCard => {
-				const patientInfo = findPatientName(patientCard);
-				if (patientInfo) {
-					const { name, InExamRoom } = patientInfo;
-					if (patientsData[name] && patientsData[name].InExamRoom) {
-						handlePatientDataUpdate(patientCard);
+				removedPatients.forEach(patientName => {
+					const wasInExamRoom = patientsData[patientName]?.InExamRoom;
+					removePatientData(patientName);
+					if (wasInExamRoom) {
+						AudioManager.playChime('patientRemoved');
+						logDebug(`Patient removed (Was in ExamRoom): ${patientName}`);
+					} else {
+						logDebug(`Patient removed (Was not in ExamRoom): ${patientName}`);
 					}
-				}
-			});
+				});
 
-			// Update the previous patient names set for next comparison
-			previousPatientNames = new Set(currentPatientNames);
+				patientCards.forEach(patientCard => {
+					const patientInfo = findPatientName(patientCard);
+					if (patientInfo) {
+						const { name } = patientInfo;
+						if (patientsData[name] && patientsData[name].InExamRoom) {
+							handlePatientDataUpdate(patientCard);
+						}
+					}
+				});
 
-			logDebug("Patient data and Time Slots updated to match the current screen.");
+				previousPatientNames = new Set(currentPatientNames);
+
+				logDebug("Patient data and Time Slots updated to match the current screen.");
+			} catch (err) {
+				console.error('[PatientManager] Error in updatePatientDataToMatchScreen:', err);
+			}
 		};
 
         /**

@@ -89,6 +89,15 @@
 		// Call loadSettings when the content script is first executed
 		loadSettings();
 
+        function getExtensionURL(filename) {
+            try {
+                return chrome.runtime.getURL(filename);
+            } catch (e) {
+                console.error('[AudioManager] Extension context invalidated — cannot load sound:', filename);
+                return '';
+            }
+        }
+
         /**
          * Loads and caches the selected sounds and volume.
          */
@@ -100,15 +109,12 @@
                 'patientRemovedFileName',
 				'examRoomNotificationFileData',
 				'examRoomNotificationFileName',
-                // Include other sounds as needed
                 'chimeVolume'
             ], result => {
-                // Load custom sounds if available, otherwise use defaults
                 cachedSoundFiles = {
-                    patientAdded: result.patientAddedFileData || chrome.runtime.getURL(result.patientAddedFileName || 'BuddyIn.mp3'),
-                    patientRemoved: result.patientRemovedFileData || chrome.runtime.getURL(result.patientRemovedFileName || 'Goodbye.mp3'),
-					examRoomNotification: result.examRoomNotificationFileData || chrome.runtime.getURL(result.examRoomNotificationFileName || '3_tone_chime-99718.mp3'),
-                    // Include other sounds as needed
+                    patientAdded:          result.patientAddedFileData          || getExtensionURL(result.patientAddedFileName          || 'BuddyIn.mp3'),
+                    patientRemoved:        result.patientRemovedFileData        || getExtensionURL(result.patientRemovedFileName        || 'Goodbye.mp3'),
+                    examRoomNotification:  result.examRoomNotificationFileData  || getExtensionURL(result.examRoomNotificationFileName  || '3_tone_chime-99718.mp3'),
                 };
 
                 cachedVolume = result.chimeVolume !== undefined ? result.chimeVolume : 0.5;

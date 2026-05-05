@@ -10,6 +10,20 @@ let enablePatientAdded = true;
 let enablePatientRemoved = true;
 let enableExamRoomNotification = true;
 
+// Reflects monitoring health in the extension badge
+function setStatusBadge(status) {
+    if (status === 'active') {
+        chrome.action.setBadgeText({ text: 'ON' });
+        chrome.action.setBadgeBackgroundColor({ color: '#15803d' });
+    } else if (status === 'error') {
+        chrome.action.setBadgeText({ text: 'ERR' });
+        chrome.action.setBadgeBackgroundColor({ color: '#b91c1c' });
+    } else {
+        chrome.action.setBadgeText({ text: '' });
+    }
+    chrome.storage.local.set({ monitorStatus: status });
+}
+
 // Function to update the browser action icon based on the extension state
 function updateIcon(isActive) {
     const iconPath = isActive ? "icon48_on.png" : "icon48_off.png";
@@ -139,14 +153,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             sendMessageToAllTabs({ message: "toggleExtensionState", state: newState });
             sendResponse({ status: "success" });
         });
-        return true; // Keep the messaging channel open for sendResponse
+        return true;
+    }
+
+    if (request.message === "setStatus") {
+        setStatusBadge(request.status);
+        sendResponse({ status: "ok" });
+        return true;
     }
 });
 
 // Initialize the extension's active state on install
 chrome.runtime.onInstalled.addListener(() => {
-    // Retrieve and initialize the state from storage if available
-    chrome.storage.local.get(['isActive', 'debug'], (result) => {
+    chrome.storage.local.get(['isActive', 'debug', 'monitorStatus'], (result) => {
         if (result.isActive === undefined) {
             chrome.storage.local.set({ isActive: true }, () => {
                 console.log("Extension enabled by default on install.");
@@ -165,18 +184,25 @@ chrome.runtime.onInstalled.addListener(() => {
             debug = false;
             console.log("Debug mode set to default (false).");
         }
+
+        if (result.monitorStatus) {
+            setStatusBadge(result.monitorStatus);
+        }
     });
 });
 
 // Handle extension startup
 chrome.runtime.onStartup.addListener(() => {
-    chrome.storage.local.get(['isActive'], (result) => {
+    chrome.storage.local.get(['isActive', 'monitorStatus'], (result) => {
         const currentState = result.isActive !== undefined ? result.isActive : true;
         chrome.storage.local.set({ isActive: currentState }, () => {
             console.log(`Extension set to ${currentState ? "active" : "inactive"} on startup.`);
             updateIcon(currentState);
             sendMessageToAllTabs({ message: "toggleExtensionState", state: currentState });
         });
+        if (result.monitorStatus) {
+            setStatusBadge(result.monitorStatus);
+        }
     });
 });
 
