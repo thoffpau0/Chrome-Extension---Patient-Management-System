@@ -9,6 +9,7 @@ let patientObserver = null;
 let patientListWatcher = null;
 let consecutiveErrors = 0;
 let pollCount = 0;
+let lastUpdateTime = null;
 const MAX_CONSECUTIVE_ERRORS = 5;
 
 // Guards against extension context invalidation after Chrome auto-updates the extension
@@ -32,6 +33,36 @@ function reportStatus(status) {
         });
     });
 }
+
+// ─── Diagnostic Log Buffer ────────────────────────────────────────────────────
+// Keeps the last 150 structured events in memory. Survives page interactions.
+// Access via: window.VR_Mon_App.getLogs() or window.VR_Mon_App.status()
+
+const LOG_MAX = 150;
+window.VR_Mon_App._logs = window.VR_Mon_App._logs || [];
+
+function logEvent(level, source, message, data) {
+    const entry = {
+        t: new Date().toISOString(),
+        level,   // 'INFO' | 'WARN' | 'ERROR' | 'EVENT'
+        source,
+        message,
+        ...(data !== undefined ? { data } : {}),
+    };
+    window.VR_Mon_App._logs.push(entry);
+    if (window.VR_Mon_App._logs.length > LOG_MAX) window.VR_Mon_App._logs.shift();
+
+    if (level === 'ERROR') {
+        console.error(`[VR][${source}]`, message, data ?? '');
+    } else if (level === 'WARN') {
+        console.warn(`[VR][${source}]`, message, data ?? '');
+    } else if (window.debug) {
+        console.log(`[VR][${source}]`, message, data ?? '');
+    }
+}
+
+// Shared hook so patientManager.js can write into the same buffer
+window.VR_Mon_App._logEvent = logEvent;
 
 // ─── Floating Widget ──────────────────────────────────────────────────────────
 
@@ -119,8 +150,10 @@ function startMonitoring() {
     isMonitoringStarted = true;
     consecutiveErrors = 0;
     pollCount = 0;
+    lastUpdateTime = null;
     setWidgetState('active');
     safeChromeCall(() => chrome.storage.local.set({ vrMonitoringActive: true }));
+    logEvent('INFO', 'Monitor', 'Monitoring started');
     loadSettings();
 }
 
@@ -130,7 +163,7 @@ function stopMonitoring() {
     setWidgetState('inactive');
     reportStatus('inactive');
     safeChromeCall(() => chrome.storage.local.set({ vrMonitoringActive: false }));
-    if (window.debug) console.log('[VR Monitor] Monitoring stopped by user.');
+    logEvent('INFO', 'Monitor', 'Monitoring stopped by user');
 }
 
 // ─── MutationObserver ─────────────────────────────────────────────────────────
@@ -138,22 +171,32 @@ function stopMonitoring() {
 function runUpdate() {
     const PatientManager = window.VR_Mon_App && window.VR_Mon_App.PatientManager;
     if (!PatientManager) {
-        console.error('[VR Monitor] PatientManager not available — check that patientManager.js loaded correctly.');
+        logEvent('ERROR', 'Monitor', 'PatientManager not available — patientManager.js may not have loaded');
         return;
     }
     try {
         PatientManager.updatePatientDataToMatchScreen();
+        lastUpdateTime = Date.now();
         consecutiveErrors = 0;
         pollCount++;
-        if (pollCount % 30 === 0) {
-            console.log(`[VR Monitor] Alive — update #${pollCount}`);
-        }
+
         if (pollCount === 1) {
+            logEvent('INFO', 'Monitor', 'First successful update — monitoring is running');
             reportStatus('active');
+        } else if (pollCount % 30 === 0) {
+            logEvent('INFO', 'Monitor', `Alive — update #${pollCount}`);
+        }
+
+        // Update tooltip with live patient count
+        const allPatients = PatientManager.getAllPatientData();
+        const count = Object.keys(allPatients).length;
+        const widget = document.getElementById('vr-monitor-widget');
+        if (widget) {
+            widget.title = `VetRadar Monitoring — Active\n${count} patient${count !== 1 ? 's' : ''} tracked | update #${pollCount}`;
         }
     } catch (err) {
         consecutiveErrors++;
-        console.error(`[VR Monitor] Update error (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}):`, err);
+        logEvent('ERROR', 'Monitor', `Update error (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS})`, { message: err.message, stack: err.stack });
         if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
             setWidgetState('error');
             reportStatus('error');
@@ -177,8 +220,8 @@ function startObserver(patientList) {
     });
 
     // Run once immediately so we capture current state
+    logEvent('INFO', 'Monitor', 'MutationObserver attached to PatientList');
     runUpdate();
-    if (window.debug) console.log('[VR Monitor] MutationObserver attached to PatientList.');
 
     // Watch the parent so we know if React unmounts the patient list (SPA navigation)
     const parent = patientList.parentElement;
@@ -190,7 +233,7 @@ function startObserver(patientList) {
                     patientObserver.disconnect();
                     patientObserver = null;
                 }
-                if (window.debug) console.log('[VR Monitor] PatientList left DOM — will reconnect when it returns.');
+                logEvent('WARN', 'Monitor', 'PatientList removed from DOM (SPA navigation?) — will reconnect');
                 if (isActive) startPatientListWatcher();
             }
         });
@@ -222,6 +265,7 @@ function startPatientListWatcher() {
         if (patientList) {
             clearInterval(patientListWatcher);
             patientListWatcher = null;
+            logEvent('INFO', 'Monitor', 'PatientList found in DOM — connecting observer');
             startObserver(patientList);
         }
     }, 1000);
@@ -287,6 +331,102 @@ safeChromeCall(() => {
         }
     });
 });
+
+// ─── Public Diagnostic API ────────────────────────────────────────────────────
+// Run any of these from the browser DevTools console on a VetRadar tab:
+//   window.VR_Mon_App.status()       → formatted state dump
+//   window.VR_Mon_App.getLogs(50)    → last N log entries, color-coded
+//   window.VR_Mon_App.copyReport()   → full diagnostic report copied to clipboard
+
+window.VR_Mon_App.status = function () {
+    const PM = window.VR_Mon_App.PatientManager;
+    const patients = PM ? PM.getAllPatientData() : {};
+    const names = Object.keys(patients);
+    const inRoom = names.filter(n => patients[n].InExamRoom);
+    const patientListInDOM = !!document.querySelector('div[data-testid="PatientList"]');
+    const secAgo = lastUpdateTime
+        ? `${((Date.now() - lastUpdateTime) / 1000).toFixed(1)}s ago`
+        : 'never';
+
+    console.group('%c[VR Monitor] Status Report', 'font-weight:bold;color:#15803d;font-size:13px');
+    console.log(`Monitoring active : ${isActive}`);
+    console.log(`Observer attached : ${patientObserver !== null}`);
+    console.log(`PatientList in DOM: ${patientListInDOM}`);
+    console.log(`Patients tracked  : ${names.length} total, ${inRoom.length} in exam room`);
+    console.log(`Updates           : ${pollCount} successful, ${consecutiveErrors} consecutive errors`);
+    console.log(`Last update       : ${secAgo}`);
+    console.log('Settings:', {
+        debug: window.debug,
+        chimeVolume: window.chimeVolume,
+        enablePatientAdded: window.enablePatientAdded,
+        enablePatientRemoved: window.enablePatientRemoved,
+        enableExamRoomNotification: window.enableExamRoomNotification,
+    });
+    console.log('Patient data:', patients);
+    console.groupEnd();
+    return { isActive, observerAttached: patientObserver !== null, patientListInDOM, patients, pollCount, consecutiveErrors, lastUpdateTime };
+};
+
+window.VR_Mon_App.getLogs = function (n = 50) {
+    const entries = window.VR_Mon_App._logs.slice(-n);
+    console.group(`%c[VR Monitor] Last ${entries.length} log entries`, 'font-weight:bold;font-size:13px');
+    entries.forEach(e => {
+        const ts = e.t.slice(11, 23);
+        const style = e.level === 'ERROR' ? 'color:#ef4444'
+            : e.level === 'WARN'  ? 'color:#f59e0b'
+            : e.level === 'EVENT' ? 'color:#3b82f6'
+            : 'color:inherit';
+        console.log(`%c${ts} [${e.level}][${e.source}] ${e.message}`, style, e.data ?? '');
+    });
+    console.groupEnd();
+    return entries;
+};
+
+window.VR_Mon_App.copyReport = function () {
+    const PM = window.VR_Mon_App.PatientManager;
+    const patients = PM ? PM.getAllPatientData() : {};
+    const patientListInDOM = !!document.querySelector('div[data-testid="PatientList"]');
+    const secAgo = lastUpdateTime
+        ? `${((Date.now() - lastUpdateTime) / 1000).toFixed(1)}s ago`
+        : 'never';
+
+    const lines = [
+        '=== VetRadar Monitor Diagnostic Report ===',
+        `Generated : ${new Date().toISOString()}`,
+        `Page URL  : ${location.href}`,
+        '',
+        '--- Status ---',
+        `Monitoring active : ${isActive}`,
+        `Observer attached : ${patientObserver !== null}`,
+        `PatientList in DOM: ${patientListInDOM}`,
+        `Patients tracked  : ${Object.keys(patients).length}`,
+        `In exam room      : ${Object.values(patients).filter(p => p.InExamRoom).length}`,
+        `Update count      : ${pollCount}`,
+        `Consecutive errors: ${consecutiveErrors}`,
+        `Last update       : ${secAgo}`,
+        '',
+        '--- Settings ---',
+        `debug                      : ${window.debug}`,
+        `chimeVolume                : ${window.chimeVolume}`,
+        `enablePatientAdded         : ${window.enablePatientAdded}`,
+        `enablePatientRemoved       : ${window.enablePatientRemoved}`,
+        `enableExamRoomNotification : ${window.enableExamRoomNotification}`,
+        '',
+        '--- Recent Logs (last 100) ---',
+        ...window.VR_Mon_App._logs.slice(-100).map(e =>
+            `${e.t.slice(11, 23)} [${e.level}][${e.source}] ${e.message}${e.data !== undefined ? ' ' + JSON.stringify(e.data) : ''}`
+        ),
+        '',
+        '--- Patient Data ---',
+        JSON.stringify(patients, null, 2),
+    ];
+
+    const text = lines.join('\n');
+    navigator.clipboard.writeText(text)
+        .then(() => console.log('[VR Monitor] Diagnostic report copied to clipboard — paste it anywhere.'))
+        .catch(() => console.log('[VR Monitor] Clipboard write blocked. Full report:\n', text));
+    return text;
+};
 
 // ─── Startup ──────────────────────────────────────────────────────────────────
 

@@ -378,6 +378,7 @@
 			// If a new notification is detected and the patient is in an exam room, play the sound
 			if (hasNotification && !currentCategoryStatus && isInExamRoom) {
 				AudioManager.playChime('examRoomNotification');
+				if (window.VR_Mon_App._logEvent) window.VR_Mon_App._logEvent('EVENT', 'Patient', 'Exam room notification triggered', { patientName, category });
             }
 
             // Update patient data
@@ -476,8 +477,10 @@
 						if (InExamRoom) {
 							AudioManager.playChime('patientAdded');
 							logDebug(`Patient added (InExamRoom): ${name}`);
+							if (window.VR_Mon_App._logEvent) window.VR_Mon_App._logEvent('EVENT', 'Patient', 'Added — entered exam room', { name });
 						} else {
 							logDebug(`Patient added (Not in ExamRoom): ${name}`);
+							if (window.VR_Mon_App._logEvent) window.VR_Mon_App._logEvent('INFO', 'Patient', 'Added — in waiting room', { name });
 						}
 					}
 				});
@@ -490,8 +493,10 @@
 					if (wasInExamRoom) {
 						AudioManager.playChime('patientRemoved');
 						logDebug(`Patient removed (Was in ExamRoom): ${patientName}`);
+						if (window.VR_Mon_App._logEvent) window.VR_Mon_App._logEvent('EVENT', 'Patient', 'Removed — was in exam room', { patientName });
 					} else {
 						logDebug(`Patient removed (Was not in ExamRoom): ${patientName}`);
+						if (window.VR_Mon_App._logEvent) window.VR_Mon_App._logEvent('INFO', 'Patient', 'Removed — was in waiting room', { patientName });
 					}
 				});
 
@@ -510,6 +515,7 @@
 				logDebug("Patient data and Time Slots updated to match the current screen.");
 			} catch (err) {
 				console.error('[PatientManager] Error in updatePatientDataToMatchScreen:', err);
+				if (window.VR_Mon_App._logEvent) window.VR_Mon_App._logEvent('ERROR', 'Patient', 'Error in updatePatientDataToMatchScreen', { message: err.message, stack: err.stack });
 			}
 		};
 
