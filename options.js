@@ -12,13 +12,13 @@ const SOUNDS = {
     },
     patientAdded: {
         label:    'Patient Added',
-        defaults: { enabled: true, fileName: 'BuddyIn.mp3', fileData: null, volume: 0.5 },
+        defaults: { enabled: true, fileName: 'BuddyIn.mp3', fileData: null, volume: 1.0 },
         keys:     { enabled: 'enablePatientAdded', fileName: 'patientAddedFileName',
                     fileData: 'patientAddedFileData', volume: 'patientAddedVolume' },
     },
     patientRemoved: {
         label:    'Patient Removed',
-        defaults: { enabled: true, fileName: 'Goodbye.mp3', fileData: null, volume: 0.5 },
+        defaults: { enabled: true, fileName: 'Goodbye.mp3', fileData: null, volume: 1.0 },
         keys:     { enabled: 'enablePatientRemoved', fileName: 'patientRemovedFileName',
                     fileData: 'patientRemovedFileData', volume: 'patientRemovedVolume' },
     },
@@ -173,7 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         e.resetBtn.addEventListener('click', () => {
-            chrome.storage.local.remove([sound.keys.fileName, sound.keys.fileData, sound.keys.volume], () => {
+            chrome.storage.local.remove([sound.keys.fileName, sound.keys.fileData, sound.keys.volume, sound.keys.enabled], () => {
                 if (chrome.runtime.lastError) { alert('Error resetting.'); return; }
                 showNotification(`"${sound.label}" reset to default.`);
                 loadAllSettings();

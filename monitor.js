@@ -14,12 +14,13 @@ const cfg = {
     enablePatientRemoved: true,
     enableExamRoomNotification: true,
     debug: false,
+    isActive: true,
 };
 
 const ALL_KEYS = [
     'chimeVolume', 'patientAddedVolume', 'patientRemovedVolume', 'examRoomNotificationVolume',
     'enablePatientAdded', 'enablePatientRemoved', 'enableExamRoomNotification',
-    'debug', 'isActive',
+    'debug', 'isActive', 'vrMonitoringActive',
     'patientAddedFileData', 'patientAddedFileName',
     'patientRemovedFileData', 'patientRemovedFileName',
     'examRoomNotificationFileData', 'examRoomNotificationFileName',
@@ -34,30 +35,26 @@ function applySettings(result) {
     cfg.enablePatientRemoved       = result.enablePatientRemoved       !== false;
     cfg.enableExamRoomNotification = result.enableExamRoomNotification !== false;
     cfg.debug                      = result.debug                      ?? false;
+    cfg.isActive                   = result.isActive                   !== false;
 }
 
 function loadSettings(cb) {
     safeChrome(() => chrome.storage.local.get(ALL_KEYS, result => {
         applySettings(result);
         loadSounds(result);
-        if (cb) cb(result.isActive !== false);
+        if (cb) cb(result.isActive !== false, result.vrMonitoringActive === true);
     }));
 }
 
-safeChrome(() => chrome.storage.onChanged.addListener((changes, area) => {
+chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
 
     const cfgKeys = ['chimeVolume','patientAddedVolume','patientRemovedVolume','examRoomNotificationVolume',
                      'enablePatientAdded','enablePatientRemoved','enableExamRoomNotification','debug'];
-    const cfgMap  = { chimeVolume: 'chimeVolume', patientAddedVolume: 'patientAddedVolume',
-                      patientRemovedVolume: 'patientRemovedVolume', examRoomNotificationVolume: 'examRoomNotificationVolume',
-                      enablePatientAdded: 'enablePatientAdded', enablePatientRemoved: 'enablePatientRemoved',
-                      enableExamRoomNotification: 'enableExamRoomNotification', debug: 'debug' };
     for (const k of cfgKeys) {
         if (changes[k]) cfg[k] = changes[k].newValue;
     }
 
-    // Reload sounds if any sound file or name changed
     const soundKeys = ['patientAddedFileData','patientAddedFileName','patientRemovedFileData',
                        'patientRemovedFileName','examRoomNotificationFileData','examRoomNotificationFileName'];
     if (soundKeys.some(k => changes[k])) {
@@ -65,11 +62,11 @@ safeChrome(() => chrome.storage.onChanged.addListener((changes, area) => {
     }
 
     if (changes.isActive) {
-        const on = changes.isActive.newValue;
-        if (!on && isMonitoring) stopMonitoring();
-        else if (on && !isMonitoring && userActivated) startMonitoring();
+        cfg.isActive = changes.isActive.newValue !== false;
+        if (!cfg.isActive && isMonitoring) stopMonitoring();
+        else if (cfg.isActive && !isMonitoring && userActivated) startMonitoring();
     }
-}));
+});
 
 // ─── Audio ────────────────────────────────────────────────────────────────────
 // 3-item queue, sequential. Clone so rapid events don't cut each other off.
@@ -126,17 +123,17 @@ function getPatientList() {
 }
 
 function scanTimeSlots() {
-    if (timeSlots.length) return;
-    timeSlots = Array.from(document.querySelectorAll('div[data-testid]'))
+    const found = Array.from(document.querySelectorAll('div[data-testid]'))
         .map(el => el.getAttribute('data-testid'))
         .filter(id => TIME_RE.test(id));
+    if (found.join(',') !== timeSlots.join(',')) {
+        timeSlots = found;
+        log('INFO', 'Monitor', 'Time slots updated', { slots: timeSlots });
+    }
 }
 
 function isInExamRoom(card) {
-    for (const node of card.querySelectorAll('*:not(script):not(style)')) {
-        if (node.textContent.trim().startsWith('Exam, ')) return true;
-    }
-    return false;
+    return card.textContent.includes('Exam, ');
 }
 
 function findNameInSubtree(el) {
@@ -158,13 +155,12 @@ function findPatientInfo(card) {
         if (!raw) continue;
         for (const stored of Object.keys(patients)) {
             if (stored.includes(raw) || raw.includes(stored)) {
-                const inRoom = isInExamRoom(card);
-                patients[stored].InExamRoom = inRoom;
-                return { name: stored, InExamRoom: inRoom };
+                return { name: stored, InExamRoom: isInExamRoom(card) };
             }
         }
         return { name: raw, InExamRoom: isInExamRoom(card) };
     }
+    log('WARN', 'Patient', 'Could not parse name from card', { preview: card.textContent.slice(0, 80).trim() });
     return null;
 }
 
@@ -234,14 +230,25 @@ function runUpdate() {
         current.add(name);
 
         if (patients[name]) {
+            const wasInRoom = patients[name].InExamRoom;
             patients[name].InExamRoom = InExamRoom;
+            if (initialized && !wasInRoom && InExamRoom) {
+                playChime('patientAdded');
+                log('EVENT', 'Patient', 'Moved to exam room', { name });
+            } else if (initialized && wasInRoom && !InExamRoom) {
+                log('INFO', 'Patient', 'Left exam room — back to waiting', { name });
+            }
         } else {
             initPatient(name, InExamRoom);
-            if (InExamRoom) {
-                playChime('patientAdded');
-                log('EVENT', 'Patient', 'Added — entered exam room', { name });
+            if (initialized) {
+                if (InExamRoom) {
+                    playChime('patientAdded');
+                    log('EVENT', 'Patient', 'Added — entered exam room', { name });
+                } else {
+                    log('INFO', 'Patient', 'Added — waiting room', { name });
+                }
             } else {
-                log('INFO', 'Patient', 'Added — waiting room', { name });
+                log('INFO', 'Patient', 'Baseline', { name, InExamRoom });
             }
         }
     }
@@ -262,7 +269,8 @@ function runUpdate() {
         if (info && patients[info.name]?.InExamRoom) checkNotifications(card);
     }
 
-    prevNames = new Set(current);
+    prevNames    = new Set(current);
+    initialized  = true;
 }
 
 // ─── Observer & Watcher ───────────────────────────────────────────────────────
@@ -273,11 +281,12 @@ let listWatcher = null;
 function onMutation() {
     try {
         runUpdate();
+        const recovering = errCount >= MAX_ERRORS;
         errCount = 0;
         updateCount++;
         lastUpdate = Date.now();
 
-        if (updateCount === 1) reportStatus('active');
+        if (updateCount === 1 || recovering) reportStatus('active');
         if (updateCount % 30 === 0) log('INFO', 'Monitor', `Alive — update #${updateCount}`);
 
         const n = Object.keys(patients).length;
@@ -335,17 +344,23 @@ function stopObserver() {
 
 let isMonitoring  = false;
 let userActivated = false;
+let initialized   = false;
 let updateCount   = 0;
 let errCount      = 0;
 let lastUpdate    = null;
 const MAX_ERRORS  = 5;
 
 function startMonitoring() {
+    if (!cfg.isActive) { log('WARN', 'Monitor', 'Start blocked — extension disabled via toolbar'); return; }
     isMonitoring  = true;
     userActivated = true;
+    initialized   = false;
     errCount      = 0;
     updateCount   = 0;
     lastUpdate    = null;
+    Object.keys(patients).forEach(k => delete patients[k]);
+    prevNames = new Set();
+    timeSlots = [];
     setWidgetState('active');
     safeChrome(() => chrome.storage.local.set({ vrMonitoringActive: true }));
     log('INFO', 'Monitor', 'Monitoring started');
@@ -393,7 +408,10 @@ function injectWidget() {
     w.innerHTML = ICON_OFF;
     w.title = 'VetRadar Monitoring — click to start';
     document.body.appendChild(w);
-    w.addEventListener('click', () => isMonitoring ? stopMonitoring() : startMonitoring());
+    w.addEventListener('click', () => {
+        if (w.classList.contains('error') || !isMonitoring) startMonitoring();
+        else stopMonitoring();
+    });
 }
 
 function setWidgetState(state) {
@@ -501,18 +519,10 @@ window.VR_Mon_App = {
 
 function init() {
     injectWidget();
-    loadSettings(extensionEnabled => {
+    loadSettings((extensionEnabled, monitoringActive) => {
         if (!extensionEnabled) { setWidgetState('inactive'); return; }
-        safeChrome(() => chrome.storage.local.get('vrMonitoringActive', r => {
-            if (r.vrMonitoringActive === true) startMonitoring();
-        }));
+        if (monitoringActive) startMonitoring();
     });
 }
 
-if (document.readyState === 'complete') {
-    init();
-} else {
-    document.addEventListener('readystatechange', function h() {
-        if (document.readyState === 'complete') { document.removeEventListener('readystatechange', h); init(); }
-    });
-}
+init();
