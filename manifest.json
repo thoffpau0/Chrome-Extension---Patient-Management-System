@@ -35,7 +35,7 @@
   "content_scripts": [
     {
       "matches": ["https://app.vetradar.com/*"],
-      "js": ["audioManager.js", "patientManager.js", "content.js"]
+      "js": ["monitor.js"]
     }
   ],
   "host_permissions": [
