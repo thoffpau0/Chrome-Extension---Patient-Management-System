@@ -460,6 +460,20 @@ function log(level, source, message, data) {
     else if (cfg.debug)         console.log(`[VR][${source}]`, message, data ?? '');
 }
 
+// ─── Debug bridge ────────────────────────────────────────────────────────────
+// Content scripts run in an isolated JS world. VR_Mon_App is not visible from
+// the DevTools console (top context). Dispatch a 'vr-mon-cmd' CustomEvent from
+// top to call diagnostic commands without switching console context:
+//   window.dispatchEvent(new CustomEvent('vr-mon-cmd', {detail:{cmd:'status'}}))
+//   window.dispatchEvent(new CustomEvent('vr-mon-cmd', {detail:{cmd:'logs'}}))
+//   window.dispatchEvent(new CustomEvent('vr-mon-cmd', {detail:{cmd:'report'}}))
+window.addEventListener('vr-mon-cmd', ev => {
+    const cmd = ev?.detail?.cmd;
+    if      (cmd === 'status')  VR_Mon_App.status();
+    else if (cmd === 'logs')    VR_Mon_App.getLogs(ev.detail.n);
+    else if (cmd === 'report')  VR_Mon_App.copyReport();
+});
+
 window.VR_Mon_App = {
     status() {
         const n = Object.keys(patients).length;
