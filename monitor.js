@@ -113,9 +113,11 @@ function drainQueue() {
     if (!audioEl[type]?.src) { drainQueue(); return; }
     const clone = audioEl[type].cloneNode();
     clone.volume = Math.min(1, cfg.chimeVolume * (cfg[volKey[type]] ?? 1.0));
-    clone.onended = drainQueue;
-    clone.onerror = () => { log('ERROR', 'Audio', `Playback error for ${type}`); drainQueue(); };
-    clone.play().catch(err => { log('ERROR', 'Audio', `play() failed for ${type}`, { error: err.message }); drainQueue(); });
+    let advanced = false;
+    const advance = () => { if (!advanced) { advanced = true; drainQueue(); } };
+    clone.onended = advance;
+    clone.onerror = () => { log('ERROR', 'Audio', `Playback error for ${type}`); advance(); };
+    clone.play().catch(err => { log('ERROR', 'Audio', `play() failed for ${type}`, { error: err.message }); advance(); });
 }
 
 // ─── Patient Tracking ─────────────────────────────────────────────────────────
@@ -149,7 +151,10 @@ function findPatientInfo(card) {
         const raw = findNameInSubtree(sib);
         if (!raw) continue;
         for (const stored of Object.keys(patients)) {
-            if (stored.includes(raw) || raw.includes(stored)) {
+            if (stored === raw) return { name: stored, InExamRoom: isInExamRoom(card) };
+        }
+        for (const stored of Object.keys(patients)) {
+            if (stored.startsWith(raw) || raw.startsWith(stored)) {
                 return { name: stored, InExamRoom: isInExamRoom(card) };
             }
         }
@@ -174,17 +179,25 @@ function isCellCompleted(cell) {
     return cell.querySelector('svg[data-testid="SvgCheck"]') !== null;
 }
 
-function checkNotifications(card) {
-    const info = findPatientInfo(card);
-    if (!info || !patients[info.name]) return;
-    const { name } = info;
+function checkNotifications(card, name) {
+    if (!patients[name]) return;
 
     const container = card.nextElementSibling?.children[0];
     if (!container) return;
 
     const cells = Array.from(container.children);
     const prev  = patients[name].taskCells;
-    const next  = [];
+
+    if (prev.length > 0 && cells.length !== prev.length) {
+        patients[name].taskCells = cells.map(c => {
+            const hasTask = hasGrandchild(c);
+            return { hasTask, isCompleted: hasTask && isCellCompleted(c) };
+        });
+        log('INFO', 'Patient', 'Column count changed — resyncing', { name, from: prev.length, to: cells.length });
+        return;
+    }
+
+    const next = [];
 
     cells.forEach((cell, i) => {
         const hasTask   = hasGrandchild(cell);
@@ -211,13 +224,15 @@ function runUpdate() {
     const list = getPatientList();
     if (!list) { log('INFO', 'Patient', 'PatientList not in DOM'); return; }
 
-    const cards   = Array.from(list.querySelectorAll('div[aria-label="Patient List Item"]'));
-    const current = new Set();
+    const cards     = Array.from(list.querySelectorAll('div[aria-label="Patient List Item"]'));
+    const current   = new Set();
+    const cardInfos = new Map();
 
     for (const card of cards) {
         const info = findPatientInfo(card);
         if (!info) continue;
         const { name, InExamRoom } = info;
+        cardInfos.set(card, info);
         current.add(name);
 
         if (patients[name]) {
@@ -239,9 +254,8 @@ function runUpdate() {
         log('EVENT', 'Patient', 'Removed', { name });
     }
 
-    for (const card of cards) {
-        const info = findPatientInfo(card);
-        if (info && patients[info.name]) checkNotifications(card);
+    for (const [card, info] of cardInfos) {
+        if (patients[info.name]) checkNotifications(card, info.name);
     }
 
     prevNames    = new Set(current);
@@ -344,6 +358,7 @@ function startMonitoring() {
 function stopMonitoring() {
     isMonitoring = false;
     stopObserver();
+    audioQueue.length = 0;
     setWidgetState('inactive');
     reportStatus('inactive');
     safeChrome(() => chrome.storage.local.set({ vrMonitoringActive: false }));
