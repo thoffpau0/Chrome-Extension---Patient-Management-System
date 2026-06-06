@@ -10,20 +10,23 @@ const cfg = {
     patientAddedVolume: 1.0,
     patientRemovedVolume: 1.0,
     examRoomNotificationVolume: 1.0,
+    taskCompletedVolume: 1.0,
     enablePatientAdded: true,
     enablePatientRemoved: true,
     enableExamRoomNotification: true,
+    enableTaskCompleted: true,
     debug: false,
     isActive: true,
 };
 
 const ALL_KEYS = [
-    'chimeVolume', 'patientAddedVolume', 'patientRemovedVolume', 'examRoomNotificationVolume',
-    'enablePatientAdded', 'enablePatientRemoved', 'enableExamRoomNotification',
+    'chimeVolume', 'patientAddedVolume', 'patientRemovedVolume', 'examRoomNotificationVolume', 'taskCompletedVolume',
+    'enablePatientAdded', 'enablePatientRemoved', 'enableExamRoomNotification', 'enableTaskCompleted',
     'debug', 'isActive', 'vrMonitoringActive',
     'patientAddedFileData', 'patientAddedFileName',
     'patientRemovedFileData', 'patientRemovedFileName',
     'examRoomNotificationFileData', 'examRoomNotificationFileName',
+    'taskCompletedFileData', 'taskCompletedFileName',
 ];
 
 function applySettings(result) {
@@ -31,9 +34,11 @@ function applySettings(result) {
     cfg.patientAddedVolume         = result.patientAddedVolume         ?? 1.0;
     cfg.patientRemovedVolume       = result.patientRemovedVolume       ?? 1.0;
     cfg.examRoomNotificationVolume = result.examRoomNotificationVolume ?? 1.0;
+    cfg.taskCompletedVolume        = result.taskCompletedVolume        ?? 1.0;
     cfg.enablePatientAdded         = result.enablePatientAdded         !== false;
     cfg.enablePatientRemoved       = result.enablePatientRemoved       !== false;
     cfg.enableExamRoomNotification = result.enableExamRoomNotification !== false;
+    cfg.enableTaskCompleted        = result.enableTaskCompleted        !== false;
     cfg.debug                      = result.debug                      ?? false;
     cfg.isActive                   = result.isActive                   !== false;
 }
@@ -49,14 +54,15 @@ function loadSettings(cb) {
 chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
 
-    const cfgKeys = ['chimeVolume','patientAddedVolume','patientRemovedVolume','examRoomNotificationVolume',
-                     'enablePatientAdded','enablePatientRemoved','enableExamRoomNotification','debug'];
+    const cfgKeys = ['chimeVolume','patientAddedVolume','patientRemovedVolume','examRoomNotificationVolume','taskCompletedVolume',
+                     'enablePatientAdded','enablePatientRemoved','enableExamRoomNotification','enableTaskCompleted','debug'];
     for (const k of cfgKeys) {
         if (changes[k]) cfg[k] = changes[k].newValue;
     }
 
     const soundKeys = ['patientAddedFileData','patientAddedFileName','patientRemovedFileData',
-                       'patientRemovedFileName','examRoomNotificationFileData','examRoomNotificationFileName'];
+                       'patientRemovedFileName','examRoomNotificationFileData','examRoomNotificationFileName',
+                       'taskCompletedFileData','taskCompletedFileName'];
     if (soundKeys.some(k => changes[k])) {
         safeChrome(() => chrome.storage.local.get(soundKeys, r => loadSounds(r)));
     }
@@ -71,7 +77,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // ─── Audio ────────────────────────────────────────────────────────────────────
 // 3-item queue, sequential. Clone so rapid events don't cut each other off.
 
-const audioEl = { patientAdded: new Audio(), patientRemoved: new Audio(), examRoomNotification: new Audio() };
+const audioEl = { patientAdded: new Audio(), patientRemoved: new Audio(), examRoomNotification: new Audio(), taskCompleted: new Audio() };
 const audioQueue = [];
 const QUEUE_MAX = 3;
 let audioPlaying = false;
@@ -85,11 +91,12 @@ function loadSounds(result) {
     audioEl.patientAdded.src          = result.patientAddedFileData         || extURL(result.patientAddedFileName         || 'BuddyIn.mp3');
     audioEl.patientRemoved.src        = result.patientRemovedFileData       || extURL(result.patientRemovedFileName       || 'Goodbye.mp3');
     audioEl.examRoomNotification.src  = result.examRoomNotificationFileData || extURL(result.examRoomNotificationFileName || '3_tone_chime-99718.mp3');
+    audioEl.taskCompleted.src         = result.taskCompletedFileData        || extURL(result.taskCompletedFileName        || 'mixkit-bell-notification-933.mp3');
     for (const a of Object.values(audioEl)) a.load();
 }
 
-const volKey = { patientAdded: 'patientAddedVolume', patientRemoved: 'patientRemovedVolume', examRoomNotification: 'examRoomNotificationVolume' };
-const enKey  = { patientAdded: 'enablePatientAdded', patientRemoved: 'enablePatientRemoved', examRoomNotification: 'enableExamRoomNotification' };
+const volKey = { patientAdded: 'patientAddedVolume', patientRemoved: 'patientRemovedVolume', examRoomNotification: 'examRoomNotificationVolume', taskCompleted: 'taskCompletedVolume' };
+const enKey  = { patientAdded: 'enablePatientAdded', patientRemoved: 'enablePatientRemoved', examRoomNotification: 'enableExamRoomNotification', taskCompleted: 'enableTaskCompleted' };
 
 function playChime(type) {
     if (!cfg[enKey[type]]) return;
@@ -113,23 +120,11 @@ function drainQueue() {
 
 // ─── Patient Tracking ─────────────────────────────────────────────────────────
 
-const patients = {};       // { [name]: { InExamRoom, criticalNotes, missed, due, timeSlots } }
+const patients = {};       // { [name]: { InExamRoom, taskCells[] } }
 let prevNames  = new Set();
-let timeSlots  = [];
-const TIME_RE  = /^\d{1,2}:\d{2}(am|pm)$/i;
 
 function getPatientList() {
     return document.querySelector('div[data-testid="PatientList"]');
-}
-
-function scanTimeSlots() {
-    const found = Array.from(document.querySelectorAll('div[data-testid]'))
-        .map(el => el.getAttribute('data-testid'))
-        .filter(id => TIME_RE.test(id));
-    if (found.join(',') !== timeSlots.join(',')) {
-        timeSlots = found;
-        log('INFO', 'Monitor', 'Time slots updated', { slots: timeSlots });
-    }
 }
 
 function isInExamRoom(card) {
@@ -165,15 +160,7 @@ function findPatientInfo(card) {
 }
 
 function initPatient(name, inRoom) {
-    const slotData = {};
-    timeSlots.forEach(s => { slotData[s] = { hasNotification: false }; });
-    patients[name] = {
-        InExamRoom: inRoom,
-        criticalNotes: { hasNotification: false },
-        missed:        { hasNotification: false },
-        due:           { hasNotification: false },
-        timeSlots: slotData,
-    };
+    patients[name] = { InExamRoom: inRoom, taskCells: [] };
 }
 
 function hasGrandchild(node) {
@@ -183,42 +170,46 @@ function hasGrandchild(node) {
     return false;
 }
 
+function isCellCompleted(cell) {
+    return cell.querySelector('svg[data-testid="SvgCheck"]') !== null;
+}
+
 function checkNotifications(card) {
     const info = findPatientInfo(card);
     if (!info || !patients[info.name]) return;
     const { name } = info;
-    const bar = card.nextElementSibling;
-    if (!bar?.children[0]) return;
 
-    const cats = ['criticalNotes', 'missed', 'due'];
-    Array.from(bar.children[0].children).forEach((child, i) => {
-        if (i < cats.length) {
-            const cat = cats[i];
-            if (cat === 'criticalNotes') return; // silenced per current design
-            const hasNew = hasGrandchild(child);
-            if (hasNew && !patients[name][cat]?.hasNotification && patients[name].InExamRoom) {
+    const container = card.nextElementSibling?.children[0];
+    if (!container) return;
+
+    const cells = Array.from(container.children);
+    const prev  = patients[name].taskCells;
+    const next  = [];
+
+    cells.forEach((cell, i) => {
+        const hasTask   = hasGrandchild(cell);
+        const completed = hasTask && isCellCompleted(cell);
+        const was       = prev[i] ?? { hasTask: false, isCompleted: false };
+
+        if (initialized) {
+            if (hasTask && !was.hasTask && !completed) {
                 playChime('examRoomNotification');
-                log('EVENT', 'Patient', 'Exam room notification', { name, category: cat });
+                log('EVENT', 'Patient', 'Task added', { name, cell: i });
             }
-            patients[name][cat] = { hasNotification: hasNew };
-        } else {
-            const slot = timeSlots[i - cats.length];
-            if (!slot) return;
-            const hasNew = hasGrandchild(child);
-            if (hasNew && !patients[name].timeSlots[slot]?.hasNotification && patients[name].InExamRoom) {
-                playChime('examRoomNotification');
-                log('EVENT', 'Patient', 'Time slot notification', { name, slot });
+            if (completed && !was.isCompleted) {
+                playChime('taskCompleted');
+                log('EVENT', 'Patient', 'Task completed', { name, cell: i });
             }
-            patients[name].timeSlots[slot] = { hasNotification: hasNew };
         }
+        next.push({ hasTask, isCompleted: completed });
     });
+
+    patients[name].taskCells = next;
 }
 
 function runUpdate() {
     const list = getPatientList();
     if (!list) { log('INFO', 'Patient', 'PatientList not in DOM'); return; }
-
-    scanTimeSlots();
 
     const cards   = Array.from(list.querySelectorAll('div[aria-label="Patient List Item"]'));
     const current = new Set();
@@ -230,23 +221,12 @@ function runUpdate() {
         current.add(name);
 
         if (patients[name]) {
-            const wasInRoom = patients[name].InExamRoom;
             patients[name].InExamRoom = InExamRoom;
-            if (initialized && !wasInRoom && InExamRoom) {
-                playChime('patientAdded');
-                log('EVENT', 'Patient', 'Moved to exam room', { name });
-            } else if (initialized && wasInRoom && !InExamRoom) {
-                log('INFO', 'Patient', 'Left exam room — back to waiting', { name });
-            }
         } else {
             initPatient(name, InExamRoom);
             if (initialized) {
-                if (InExamRoom) {
-                    playChime('patientAdded');
-                    log('EVENT', 'Patient', 'Added — entered exam room', { name });
-                } else {
-                    log('INFO', 'Patient', 'Added — waiting room', { name });
-                }
+                playChime('patientAdded');
+                log('EVENT', 'Patient', 'Added', { name });
             } else {
                 log('INFO', 'Patient', 'Baseline', { name, InExamRoom });
             }
@@ -254,19 +234,14 @@ function runUpdate() {
     }
 
     for (const name of [...prevNames].filter(n => !current.has(n))) {
-        const wasInRoom = patients[name]?.InExamRoom;
         delete patients[name];
-        if (wasInRoom) {
-            playChime('patientRemoved');
-            log('EVENT', 'Patient', 'Removed — was in exam room', { name });
-        } else {
-            log('INFO', 'Patient', 'Removed — was in waiting room', { name });
-        }
+        playChime('patientRemoved');
+        log('EVENT', 'Patient', 'Removed', { name });
     }
 
     for (const card of cards) {
         const info = findPatientInfo(card);
-        if (info && patients[info.name]?.InExamRoom) checkNotifications(card);
+        if (info && patients[info.name]) checkNotifications(card);
     }
 
     prevNames    = new Set(current);
@@ -360,7 +335,6 @@ function startMonitoring() {
     lastUpdate    = null;
     Object.keys(patients).forEach(k => delete patients[k]);
     prevNames = new Set();
-    timeSlots = [];
     setWidgetState('active');
     safeChrome(() => chrome.storage.local.set({ vrMonitoringActive: true }));
     log('INFO', 'Monitor', 'Monitoring started');

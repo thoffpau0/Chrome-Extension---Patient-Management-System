@@ -22,6 +22,12 @@ const SOUNDS = {
         keys:     { enabled: 'enablePatientRemoved', fileName: 'patientRemovedFileName',
                     fileData: 'patientRemovedFileData', volume: 'patientRemovedVolume' },
     },
+    taskCompleted: {
+        label:    'Task Completed',
+        defaults: { enabled: true, fileName: 'mixkit-bell-notification-933.mp3', fileData: null, volume: 1.0 },
+        keys:     { enabled: 'enableTaskCompleted', fileName: 'taskCompletedFileName',
+                    fileData: 'taskCompletedFileData', volume: 'taskCompletedVolume' },
+    },
 };
 
 // ─── DOM helpers ──────────────────────────────────────────────────────────────
