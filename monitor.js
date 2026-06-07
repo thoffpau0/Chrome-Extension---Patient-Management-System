@@ -254,15 +254,34 @@ function runUpdate() {
 
     const current = new Set([...cardInfos.values()].map(i => i.name));
 
-    // Never act on an empty scan. The list element can exist before its cards
-    // render (startup) or briefly during a VetRadar remount. Acting on zero
-    // patients would either flip the baseline (false "Added" for everyone on
-    // the next scan) or wipe taskCounts (missed task chimes). Skip entirely —
-    // initialized stays false until we actually see a patient.
     if (current.size === 0) {
-        if (prevNames.size > 0) log('INFO', 'Patient', 'No parseable patients — skipping (possible remount)');
+        if (cards.length === 0 && prevNames.size > 0 && !emptyBoardTimer) {
+            // No card elements at all — could be a genuine empty board or a
+            // brief remount zero-state. Confirm after 1.2s: if still empty, fire removals.
+            log('INFO', 'Patient', 'Board appears empty — confirming...');
+            emptyBoardTimer = setTimeout(() => {
+                emptyBoardTimer = null;
+                const pl = getPatientList();
+                if (!pl) return;
+                const still = pl.querySelector('div[aria-label="Patient List Item"]');
+                if (!still && prevNames.size > 0) {
+                    for (const name of [...prevNames]) {
+                        delete patients[name];
+                        playChime('patientRemoved');
+                        log('EVENT', 'Patient', 'Removed', { name });
+                    }
+                    prevNames = new Set();
+                }
+            }, 1200);
+        } else if (cards.length > 0) {
+            // Cards exist but names unparseable — React mid-render, skip cleanly.
+            if (emptyBoardTimer) { clearTimeout(emptyBoardTimer); emptyBoardTimer = null; }
+            if (prevNames.size > 0) log('INFO', 'Patient', 'No parseable patients — skipping (remount)');
+        }
         return;
     }
+    // Parseable patients present — cancel any pending empty-board removal.
+    if (emptyBoardTimer) { clearTimeout(emptyBoardTimer); emptyBoardTimer = null; }
 
     for (const [, info] of cardInfos) {
         const { name, InExamRoom } = info;
@@ -397,6 +416,7 @@ let updateCount     = 0;
 let errCount        = 0;
 let lastUpdate      = null;
 let mutedChimeCount = 0;
+let emptyBoardTimer = null;
 const MAX_ERRORS    = 5;
 
 function updateBadge() {
@@ -434,6 +454,7 @@ function stopMonitoring() {
     stopObserver();
     audioQueue.length = 0;
     mutedChimeCount = 0;
+    if (emptyBoardTimer) { clearTimeout(emptyBoardTimer); emptyBoardTimer = null; }
     setWidgetState('inactive');
     updateBadge();
     reportStatus('inactive');
