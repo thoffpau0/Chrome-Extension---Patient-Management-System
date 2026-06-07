@@ -10,20 +10,23 @@ const cfg = {
     patientAddedVolume: 1.0,
     patientRemovedVolume: 1.0,
     examRoomNotificationVolume: 1.0,
+    taskCompletedVolume: 1.0,
     enablePatientAdded: true,
     enablePatientRemoved: true,
     enableExamRoomNotification: true,
+    enableTaskCompleted: true,
     debug: false,
     isActive: true,
 };
 
 const ALL_KEYS = [
-    'chimeVolume', 'patientAddedVolume', 'patientRemovedVolume', 'examRoomNotificationVolume',
-    'enablePatientAdded', 'enablePatientRemoved', 'enableExamRoomNotification',
+    'chimeVolume', 'patientAddedVolume', 'patientRemovedVolume', 'examRoomNotificationVolume', 'taskCompletedVolume',
+    'enablePatientAdded', 'enablePatientRemoved', 'enableExamRoomNotification', 'enableTaskCompleted',
     'debug', 'isActive', 'vrMonitoringActive',
     'patientAddedFileData', 'patientAddedFileName',
     'patientRemovedFileData', 'patientRemovedFileName',
     'examRoomNotificationFileData', 'examRoomNotificationFileName',
+    'taskCompletedFileData', 'taskCompletedFileName',
 ];
 
 function applySettings(result) {
@@ -31,9 +34,11 @@ function applySettings(result) {
     cfg.patientAddedVolume         = result.patientAddedVolume         ?? 1.0;
     cfg.patientRemovedVolume       = result.patientRemovedVolume       ?? 1.0;
     cfg.examRoomNotificationVolume = result.examRoomNotificationVolume ?? 1.0;
+    cfg.taskCompletedVolume        = result.taskCompletedVolume        ?? 1.0;
     cfg.enablePatientAdded         = result.enablePatientAdded         !== false;
     cfg.enablePatientRemoved       = result.enablePatientRemoved       !== false;
     cfg.enableExamRoomNotification = result.enableExamRoomNotification !== false;
+    cfg.enableTaskCompleted        = result.enableTaskCompleted        !== false;
     cfg.debug                      = result.debug                      ?? false;
     cfg.isActive                   = result.isActive                   !== false;
 }
@@ -49,14 +54,15 @@ function loadSettings(cb) {
 chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
 
-    const cfgKeys = ['chimeVolume','patientAddedVolume','patientRemovedVolume','examRoomNotificationVolume',
-                     'enablePatientAdded','enablePatientRemoved','enableExamRoomNotification','debug'];
+    const cfgKeys = ['chimeVolume','patientAddedVolume','patientRemovedVolume','examRoomNotificationVolume','taskCompletedVolume',
+                     'enablePatientAdded','enablePatientRemoved','enableExamRoomNotification','enableTaskCompleted','debug'];
     for (const k of cfgKeys) {
         if (changes[k]) cfg[k] = changes[k].newValue;
     }
 
     const soundKeys = ['patientAddedFileData','patientAddedFileName','patientRemovedFileData',
-                       'patientRemovedFileName','examRoomNotificationFileData','examRoomNotificationFileName'];
+                       'patientRemovedFileName','examRoomNotificationFileData','examRoomNotificationFileName',
+                       'taskCompletedFileData','taskCompletedFileName'];
     if (soundKeys.some(k => changes[k])) {
         safeChrome(() => chrome.storage.local.get(soundKeys, r => loadSounds(r)));
     }
@@ -71,7 +77,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // ─── Audio ────────────────────────────────────────────────────────────────────
 // 3-item queue, sequential. Clone so rapid events don't cut each other off.
 
-const audioEl = { patientAdded: new Audio(), patientRemoved: new Audio(), examRoomNotification: new Audio() };
+const audioEl = { patientAdded: new Audio(), patientRemoved: new Audio(), examRoomNotification: new Audio(), taskCompleted: new Audio() };
 const audioQueue = [];
 const QUEUE_MAX = 3;
 let audioPlaying = false;
@@ -85,11 +91,12 @@ function loadSounds(result) {
     audioEl.patientAdded.src          = result.patientAddedFileData         || extURL(result.patientAddedFileName         || 'BuddyIn.mp3');
     audioEl.patientRemoved.src        = result.patientRemovedFileData       || extURL(result.patientRemovedFileName       || 'Goodbye.mp3');
     audioEl.examRoomNotification.src  = result.examRoomNotificationFileData || extURL(result.examRoomNotificationFileName || '3_tone_chime-99718.mp3');
+    audioEl.taskCompleted.src         = result.taskCompletedFileData        || extURL(result.taskCompletedFileName        || 'mixkit-bell-notification-933.mp3');
     for (const a of Object.values(audioEl)) a.load();
 }
 
-const volKey = { patientAdded: 'patientAddedVolume', patientRemoved: 'patientRemovedVolume', examRoomNotification: 'examRoomNotificationVolume' };
-const enKey  = { patientAdded: 'enablePatientAdded', patientRemoved: 'enablePatientRemoved', examRoomNotification: 'enableExamRoomNotification' };
+const volKey = { patientAdded: 'patientAddedVolume', patientRemoved: 'patientRemovedVolume', examRoomNotification: 'examRoomNotificationVolume', taskCompleted: 'taskCompletedVolume' };
+const enKey  = { patientAdded: 'enablePatientAdded', patientRemoved: 'enablePatientRemoved', examRoomNotification: 'enableExamRoomNotification', taskCompleted: 'enableTaskCompleted' };
 
 function playChime(type) {
     if (!cfg[enKey[type]]) return;
@@ -106,30 +113,30 @@ function drainQueue() {
     if (!audioEl[type]?.src) { drainQueue(); return; }
     const clone = audioEl[type].cloneNode();
     clone.volume = Math.min(1, cfg.chimeVolume * (cfg[volKey[type]] ?? 1.0));
-    clone.onended = drainQueue;
-    clone.onerror = () => { log('ERROR', 'Audio', `Playback error for ${type}`); drainQueue(); };
-    clone.play().catch(err => { log('ERROR', 'Audio', `play() failed for ${type}`, { error: err.message }); drainQueue(); });
+    let advanced = false;
+    const advance = () => { if (!advanced) { advanced = true; drainQueue(); } };
+    clone.onended = advance;
+    clone.onerror = () => { log('ERROR', 'Audio', `Playback error for ${type}`); advance(); };
+    clone.play().catch(err => {
+        if (err?.name === 'NotAllowedError') {
+            audioPrimed = false;   // autoplay gate not unlocked — re-prime on next interaction
+            mutedChimeCount++;
+            log('WARN', 'Audio', `Autoplay blocked for ${type} — will play after next page interaction (${mutedChimeCount} missed)`);
+            if (isMonitoring) { setWidgetState('muted'); updateBadge(); }
+        } else {
+            log('ERROR', 'Audio', `play() failed for ${type}: ${err.message}`);
+        }
+        advance();
+    });
 }
 
 // ─── Patient Tracking ─────────────────────────────────────────────────────────
 
-const patients = {};       // { [name]: { InExamRoom, criticalNotes, missed, due, timeSlots } }
+const patients = {};       // { [name]: { InExamRoom, taskCounts:{active,completed}|null } }
 let prevNames  = new Set();
-let timeSlots  = [];
-const TIME_RE  = /^\d{1,2}:\d{2}(am|pm)$/i;
 
 function getPatientList() {
     return document.querySelector('div[data-testid="PatientList"]');
-}
-
-function scanTimeSlots() {
-    const found = Array.from(document.querySelectorAll('div[data-testid]'))
-        .map(el => el.getAttribute('data-testid'))
-        .filter(id => TIME_RE.test(id));
-    if (found.join(',') !== timeSlots.join(',')) {
-        timeSlots = found;
-        log('INFO', 'Monitor', 'Time slots updated', { slots: timeSlots });
-    }
 }
 
 function isInExamRoom(card) {
@@ -154,7 +161,10 @@ function findPatientInfo(card) {
         const raw = findNameInSubtree(sib);
         if (!raw) continue;
         for (const stored of Object.keys(patients)) {
-            if (stored.includes(raw) || raw.includes(stored)) {
+            if (stored === raw) return { name: stored, InExamRoom: isInExamRoom(card) };
+        }
+        for (const stored of Object.keys(patients)) {
+            if (stored.startsWith(raw) || raw.startsWith(stored)) {
                 return { name: stored, InExamRoom: isInExamRoom(card) };
             }
         }
@@ -165,15 +175,7 @@ function findPatientInfo(card) {
 }
 
 function initPatient(name, inRoom) {
-    const slotData = {};
-    timeSlots.forEach(s => { slotData[s] = { hasNotification: false }; });
-    patients[name] = {
-        InExamRoom: inRoom,
-        criticalNotes: { hasNotification: false },
-        missed:        { hasNotification: false },
-        due:           { hasNotification: false },
-        timeSlots: slotData,
-    };
+    patients[name] = { InExamRoom: inRoom, taskCounts: null };
 }
 
 function hasGrandchild(node) {
@@ -183,70 +185,89 @@ function hasGrandchild(node) {
     return false;
 }
 
-function checkNotifications(card) {
-    const info = findPatientInfo(card);
-    if (!info || !patients[info.name]) return;
-    const { name } = info;
-    const bar = card.nextElementSibling;
-    if (!bar?.children[0]) return;
+function isCellCompleted(cell) {
+    return cell.querySelector('svg[data-testid="SvgCheck"]') !== null;
+}
 
-    const cats = ['criticalNotes', 'missed', 'due'];
-    Array.from(bar.children[0].children).forEach((child, i) => {
-        if (i < cats.length) {
-            const cat = cats[i];
-            if (cat === 'criticalNotes') return; // silenced per current design
-            const hasNew = hasGrandchild(child);
-            if (hasNew && !patients[name][cat]?.hasNotification && patients[name].InExamRoom) {
-                playChime('examRoomNotification');
-                log('EVENT', 'Patient', 'Exam room notification', { name, category: cat });
-            }
-            patients[name][cat] = { hasNotification: hasNew };
-        } else {
-            const slot = timeSlots[i - cats.length];
-            if (!slot) return;
-            const hasNew = hasGrandchild(child);
-            if (hasNew && !patients[name].timeSlots[slot]?.hasNotification && patients[name].InExamRoom) {
-                playChime('examRoomNotification');
-                log('EVENT', 'Patient', 'Time slot notification', { name, slot });
-            }
-            patients[name].timeSlots[slot] = { hasNotification: hasNew };
-        }
+// Count task-bearing cells, ignoring the Critical Notes column (always child 0).
+// Robust to column shifts and to the grid collapsing to 1 cell when a patient
+// has no tasks then expanding to the full column set when the first task lands.
+function countTasks(container) {
+    let active = 0, completed = 0;
+    Array.from(container.children).forEach((cell, i) => {
+        if (i === 0) return;              // Critical Notes column — not a task (handled separately later)
+        if (!hasGrandchild(cell)) return; // empty time/status cell
+        if (isCellCompleted(cell)) completed++;
+        else active++;
     });
+    return { active, completed };
+}
+
+function checkNotifications(card, name) {
+    const p = patients[name];
+    if (!p) return;
+
+    const container = card.nextElementSibling?.children[0];
+    if (!container) {
+        log('WARN', 'Patient', 'No task container found', { name });
+        return;
+    }
+
+    const { active, completed } = countTasks(container);
+    const prev = p.taskCounts;
+
+    if (!prev || prev.active !== active || prev.completed !== completed) {
+        log('INFO', 'Patient', 'Task counts changed', { name, prev, now: { active, completed } });
+    }
+
+    if (initialized && prev) {
+        for (let k = prev.active; k < active; k++) {
+            playChime('examRoomNotification');
+            log('EVENT', 'Patient', 'Task added', { name, active });
+        }
+        for (let k = prev.completed; k < completed; k++) {
+            playChime('taskCompleted');
+            log('EVENT', 'Patient', 'Task completed', { name, completed });
+        }
+    }
+
+    p.taskCounts = { active, completed };
 }
 
 function runUpdate() {
     const list = getPatientList();
     if (!list) { log('INFO', 'Patient', 'PatientList not in DOM'); return; }
 
-    scanTimeSlots();
+    const cards     = Array.from(list.querySelectorAll('div[aria-label="Patient List Item"]'));
+    const cardInfos = new Map();
 
-    const cards   = Array.from(list.querySelectorAll('div[aria-label="Patient List Item"]'));
-    const current = new Set();
-
+    // Parse pass: resolve all patient names before touching any state.
     for (const card of cards) {
         const info = findPatientInfo(card);
-        if (!info) continue;
-        const { name, InExamRoom } = info;
-        current.add(name);
+        if (info) cardInfos.set(card, info);
+    }
 
+    const current = new Set([...cardInfos.values()].map(i => i.name));
+
+    // Never act on an empty scan. The list element can exist before its cards
+    // render (startup) or briefly during a VetRadar remount. Acting on zero
+    // patients would either flip the baseline (false "Added" for everyone on
+    // the next scan) or wipe taskCounts (missed task chimes). Skip entirely —
+    // initialized stays false until we actually see a patient.
+    if (current.size === 0) {
+        if (prevNames.size > 0) log('INFO', 'Patient', 'No parseable patients — skipping (possible remount)');
+        return;
+    }
+
+    for (const [, info] of cardInfos) {
+        const { name, InExamRoom } = info;
         if (patients[name]) {
-            const wasInRoom = patients[name].InExamRoom;
             patients[name].InExamRoom = InExamRoom;
-            if (initialized && !wasInRoom && InExamRoom) {
-                playChime('patientAdded');
-                log('EVENT', 'Patient', 'Moved to exam room', { name });
-            } else if (initialized && wasInRoom && !InExamRoom) {
-                log('INFO', 'Patient', 'Left exam room — back to waiting', { name });
-            }
         } else {
             initPatient(name, InExamRoom);
             if (initialized) {
-                if (InExamRoom) {
-                    playChime('patientAdded');
-                    log('EVENT', 'Patient', 'Added — entered exam room', { name });
-                } else {
-                    log('INFO', 'Patient', 'Added — waiting room', { name });
-                }
+                playChime('patientAdded');
+                log('EVENT', 'Patient', 'Added', { name });
             } else {
                 log('INFO', 'Patient', 'Baseline', { name, InExamRoom });
             }
@@ -254,19 +275,13 @@ function runUpdate() {
     }
 
     for (const name of [...prevNames].filter(n => !current.has(n))) {
-        const wasInRoom = patients[name]?.InExamRoom;
         delete patients[name];
-        if (wasInRoom) {
-            playChime('patientRemoved');
-            log('EVENT', 'Patient', 'Removed — was in exam room', { name });
-        } else {
-            log('INFO', 'Patient', 'Removed — was in waiting room', { name });
-        }
+        playChime('patientRemoved');
+        log('EVENT', 'Patient', 'Removed', { name });
     }
 
-    for (const card of cards) {
-        const info = findPatientInfo(card);
-        if (info && patients[info.name]?.InExamRoom) checkNotifications(card);
+    for (const [card, info] of cardInfos) {
+        if (patients[info.name]) checkNotifications(card, info.name);
     }
 
     prevNames    = new Set(current);
@@ -291,8 +306,12 @@ function onMutation() {
 
         const n = Object.keys(patients).length;
         const w = document.getElementById('vr-monitor-widget');
-        if (w) w.title = `VetRadar Monitoring — Active\n${n} patient${n !== 1 ? 's' : ''} | update #${updateCount}`;
-        setWidgetState('active');
+        if (audioPrimed) {
+            if (w) w.title = `VetRadar Monitoring — Active\n${n} patient${n !== 1 ? 's' : ''} | update #${updateCount}`;
+            setWidgetState('active');
+        } else {
+            setWidgetState('muted');
+        }
     } catch (err) {
         errCount++;
         log('ERROR', 'Monitor', 'runUpdate threw', { message: err.message, stack: err.stack });
@@ -342,13 +361,49 @@ function stopObserver() {
 
 // ─── Monitor Control ──────────────────────────────────────────────────────────
 
-let isMonitoring  = false;
-let userActivated = false;
-let initialized   = false;
-let updateCount   = 0;
-let errCount      = 0;
-let lastUpdate    = null;
-const MAX_ERRORS  = 5;
+// Play every sound at volume 0 so Chrome's autoplay gate is unlocked before any
+// real event fires. Must be called from within a user-gesture handler to work.
+// audioPrimed flips to true only when a play() actually resolves, so the widget
+// state reflects whether sound will really work.
+let audioPrimed = false;
+function primeAudio() {
+    if (audioPrimed) return;
+    for (const a of Object.values(audioEl)) {
+        const clone = a.cloneNode();
+        clone.volume = 0;
+        const p = clone.play();
+        if (!p) continue;
+        p.then(() => {
+            clone.pause();
+            if (!audioPrimed) {
+                audioPrimed = true;
+                mutedChimeCount = 0;
+                log('INFO', 'Audio', 'Autoplay gate unlocked — sound enabled');
+                if (isMonitoring) { setWidgetState('active'); updateBadge(); }
+            }
+        }).catch(() => {});
+    }
+}
+
+let isMonitoring    = false;
+let userActivated   = false;
+let initialized     = false;
+let updateCount     = 0;
+let errCount        = 0;
+let lastUpdate      = null;
+let mutedChimeCount = 0;
+const MAX_ERRORS    = 5;
+
+function updateBadge() {
+    const w = document.getElementById('vr-monitor-widget');
+    if (!w) return;
+    if (mutedChimeCount > 0) {
+        w.dataset.badge = mutedChimeCount > 9 ? '9+' : String(mutedChimeCount);
+    } else {
+        delete w.dataset.badge;
+    }
+}
+const INSTANCE_ID = Math.random().toString(36).slice(2, 7);
 
 function startMonitoring() {
     if (!cfg.isActive) { log('WARN', 'Monitor', 'Start blocked — extension disabled via toolbar'); return; }
@@ -360,20 +415,25 @@ function startMonitoring() {
     lastUpdate    = null;
     Object.keys(patients).forEach(k => delete patients[k]);
     prevNames = new Set();
-    timeSlots = [];
-    setWidgetState('active');
+    mutedChimeCount = 0;
+    primeAudio();
+    setWidgetState(audioPrimed ? 'active' : 'muted');
+    updateBadge();
     safeChrome(() => chrome.storage.local.set({ vrMonitoringActive: true }));
-    log('INFO', 'Monitor', 'Monitoring started');
+    log('INFO', 'Monitor', 'Monitoring started', { instance: INSTANCE_ID });
     startListWatcher();
 }
 
 function stopMonitoring() {
     isMonitoring = false;
     stopObserver();
+    audioQueue.length = 0;
+    mutedChimeCount = 0;
     setWidgetState('inactive');
+    updateBadge();
     reportStatus('inactive');
     safeChrome(() => chrome.storage.local.set({ vrMonitoringActive: false }));
-    log('INFO', 'Monitor', 'Monitoring stopped');
+    log('INFO', 'Monitor', 'Monitoring stopped', { instance: INSTANCE_ID });
 }
 
 // ─── Widget ───────────────────────────────────────────────────────────────────
@@ -385,14 +445,27 @@ const WIDGET_CSS = `
         z-index:2147483647; display:flex; align-items:center; justify-content:center;
         box-shadow:0 2px 8px rgba(0,0,0,0.35);
         transition:background-color 0.25s ease, transform 0.1s ease;
-        background-color:#b91c1c; user-select:none;
+        background-color:#b91c1c; user-select:none; overflow:visible;
     }
     #vr-monitor-widget:hover { transform:scale(1.1); }
     #vr-monitor-widget.active { background-color:#15803d; }
+    #vr-monitor-widget.muted  { background-color:#d97706; animation:vr-pulse-amber 1.6s ease-in-out infinite; }
     #vr-monitor-widget.error  { background-color:#b91c1c; animation:vr-pulse 1.4s ease-in-out infinite; }
     @keyframes vr-pulse {
         0%,100% { box-shadow:0 2px 8px rgba(185,28,28,0.4); }
         50%      { box-shadow:0 0 18px 4px rgba(185,28,28,0.85); }
+    }
+    @keyframes vr-pulse-amber {
+        0%,100% { box-shadow:0 2px 8px rgba(217,119,6,0.4); }
+        50%      { box-shadow:0 0 18px 4px rgba(217,119,6,0.85); }
+    }
+    #vr-monitor-widget[data-badge]::after {
+        content: attr(data-badge);
+        position:absolute; top:-6px; right:-6px;
+        min-width:18px; height:18px; padding:0 4px;
+        border-radius:9px; background:#ef4444; color:#fff;
+        font-size:10px; font-weight:bold; line-height:18px; text-align:center;
+        border:2px solid #fff; box-sizing:border-box; pointer-events:none;
     }
 `;
 const ICON_OFF = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>`;
@@ -410,6 +483,7 @@ function injectWidget() {
     document.body.appendChild(w);
     w.addEventListener('click', () => {
         if (w.classList.contains('error') || !isMonitoring) startMonitoring();
+        else if (w.classList.contains('muted')) primeAudio();  // enable sound, keep monitoring
         else stopMonitoring();
     });
 }
@@ -417,10 +491,13 @@ function injectWidget() {
 function setWidgetState(state) {
     const w = document.getElementById('vr-monitor-widget');
     if (!w) return;
-    w.classList.remove('active', 'error');
+    w.classList.remove('active', 'error', 'muted');
     if (state === 'active') {
         w.classList.add('active'); w.innerHTML = ICON_ON;
         // tooltip is updated by onMutation with live patient count
+    } else if (state === 'muted') {
+        w.classList.add('muted'); w.innerHTML = ICON_OFF;
+        w.title = 'VetRadar Monitoring — ACTIVE, but sound is paused.\nClick anywhere on the page to enable sound.';
     } else if (state === 'error') {
         w.classList.add('error'); w.innerHTML = ICON_OFF;
         w.title = 'VetRadar Monitoring — error (click to retry)';
@@ -533,6 +610,17 @@ window.VR_Mon_App = {
 
 function init() {
     injectWidget();
+
+    // Unlock Chrome's autoplay gate on user interaction anywhere on the page.
+    // Auto-resumed monitoring has no user gesture, so priming inside
+    // startMonitoring() alone isn't enough. Listeners stay attached and
+    // primeAudio() is a no-op once primed, so if a chime is ever blocked again
+    // (audioPrimed reset to false) the next click re-primes.
+    document.addEventListener('pointerdown', primeAudio, true);
+    document.addEventListener('keydown', primeAudio, true);
+
+    log('INFO', 'Monitor', 'Content script loaded', { instance: INSTANCE_ID, frame: window === window.top ? 'top' : 'iframe', url: location.href });
+
     loadSettings((extensionEnabled, monitoringActive) => {
         if (!extensionEnabled) { setWidgetState('inactive'); return; }
         if (monitoringActive) startMonitoring();

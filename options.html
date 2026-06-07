@@ -256,6 +256,29 @@
             <button class="reset-button" id="resetPatientRemoved">Reset</button>
             <button id="playLibraryPatientRemoved">Play</button>
         </div>
+
+        <!-- Task Completed Sound -->
+        <div class="sound-row">
+            <input type="checkbox" id="enableTaskCompleted" checked>
+            <label for="enableTaskCompleted">Task Completed Sound</label>
+            <select id="libraryTaskCompleted">
+                <option value="mixkit-bell-notification-933.mp3">Bell Notification</option>
+                <option value="3_tone_chime-99718.mp3">3 Tone Chime</option>
+                <option value="BuddyIn.mp3">Buddy In</option>
+                <option value="Goodbye.mp3">Goodbye</option>
+                <option value="simple-notification-152054.mp3">Simple Notification</option>
+                <option value="mixkit-doorbell-single-press-333.mp3">Doorbell Single Press</option>
+            </select>
+            <div class="volume-slider">
+                <input type="range" id="volumeLibraryTaskCompleted" min="0" max="1" step="0.05" value="1.0">
+                <span id="volumeLibraryTaskCompletedValue">100%</span>
+            </div>
+            <div class="dropzone" id="dropzoneTaskCompleted" tabindex="0">
+                Drag & drop or click to select a file
+            </div>
+            <button class="reset-button" id="resetTaskCompleted">Reset</button>
+            <button id="playLibraryTaskCompleted">Play</button>
+        </div>
     </div>
 
     <!-- Action Buttons -->
