@@ -1,122 +1,98 @@
+# Vet Radar Notification — Chrome Extension
 
-# Patient Data Monitoring Chrome Extension
-
-## Description
-
-A custom Chrome extension designed to monitor real-time updates to patient data in a web-based system. The extension tracks changes to patient cards, time slot headers, and diagnostics, providing auditory alerts for critical updates. It efficiently handles DOM mutations by using modular MutationObservers for patient cards and time slot headers.
+A Chrome extension for [VetRadar](https://app.vetradar.com) that monitors the patient board in real time and plays configurable audio chimes so your clinic team never misses a critical update.
 
 ## Features
 
-- Observes changes in patient cards and time slot headers.
-- Plays a chime when diagnostics updates exceed current values.
-- Dynamically manages time slots and patient diagnostics data.
-- Real-time mutation observation with efficient event handling.
-- Modular design for handling individual DOM components.
+- **Patient Added** — chime plays when a new patient appears on the board
+- **Patient Removed** — chime plays when a patient is discharged or removed
+- **New Task** — chime plays when a task is assigned to any patient
+- **Task Completed** — chime plays when a task is marked done
+- **Amber "muted" state** — when Chrome's autoplay policy blocks sound (e.g. after navigating into a patient record and returning), the widget turns amber with a missed-chime badge counter so staff know to click the page to re-enable sound
+- **Four independent sound channels** — each with its own sound selection, volume, and enable/disable toggle
+- **Custom audio** — upload your own MP3 for any channel via drag-and-drop
 
-## Installation
+## Widget States
 
-1. **Clone the Repository:**
+| Colour | Meaning |
+|--------|---------|
+| **Green** | Active — monitoring and sound enabled |
+| **Amber** (pulsing) | Active — monitoring but sound is paused; badge shows missed chime count; click anywhere on the page to re-enable |
+| **Red** (inactive) | Not monitoring — click widget to start |
+| **Red** (pulsing) | Error — PatientList not found or repeated failures; click to retry |
 
-   Open a terminal and run the following command to clone the repository:
-   
-   ```bash
-   git clone https://github.com/your-username/patient-data-monitor.git
-   ```
+## Folder Structure
 
-2. **Navigate to the Project Directory:**
+```
+Chrome-Extension---Patient-Management-System/
+├── Audio/                  # MP3 sound files
+├── graphic assets/         # Extension icons and store graphics
+├── background.js           # Service worker — badge/icon management
+├── manifest.json           # Extension manifest (MV3)
+├── monitor.js              # Content script — all monitoring logic
+├── options.html            # Settings page UI
+├── options.js              # Settings page logic
+└── privacy-policy.html
+```
 
-   ```bash
-   cd patient-data-monitor
-   ```
+## Installation (Developer / Unpacked)
 
-3. **Load the Extension in Chrome:**
-   - Open Chrome and navigate to `chrome://extensions/`.
-   - Enable "Developer mode" by toggling the switch at the top right.
-   - Click "Load unpacked" and select the project directory.
-
-4. **Test the Extension:**
-   - Open a web page that contains the patient list interface.
-   - Make sure the console is open (`Ctrl + Shift + J`).
-   - Changes to the patient list and diagnostics should trigger console logs and a chime.
+1. Clone or download this repository
+2. Open Chrome and go to `chrome://extensions/`
+3. Enable **Developer mode** (toggle, top right)
+4. Click **Load unpacked** and select the project folder
+5. Navigate to `https://app.vetradar.com` — the widget appears bottom-right
 
 ## Usage
 
-   How to Use the Extension
-      This guide walks through how to install, configure, and use the Chrome extension for monitoring patient data updates, including managing audio alerts and configuration options.
-   
-   Requirements
-   
-      Supported Browsers: Chrome (Other Chromium-based browsers may also work, but Chrome is recommended).
-      Audio Files: You can select an audio chime for alerts. The extension only supports .mp3 format for the audio files.
-      
-   Features
-   
-      Monitoring Patient Data: The extension tracks changes in the patient list and time slots, displaying real-time updates. Alerts are generated when certain conditions are met, such as diagnostic changes.
-      Customizable Audio Alerts: You can customize the sound played when a diagnostic alert is triggered.
-      Persistent Patient Data Management: Patient data is stored and updated in the background with options to clear or export this data at any time.
-      
-   Icon States
-   
-      Idle/Gray: The extension is installed but not actively monitoring anything. No data is being tracked, and no alerts will trigger.
-      Active/Green: The extension is actively monitoring patient list data. Any changes to time slots or diagnostics will be tracked and potentially trigger alerts.
-      Error/Red: There has been an issue, such as the Patient List not being detected or an error when loading audio alerts. The extension is unable to monitor correctly and may require attention.
-      Debug Mode/Blue: If the extension is running in debug mode, you’ll see additional logs in the Chrome Developer Tools Console. This mode is for troubleshooting and diagnostics.
-      
-   Options Available
-   
-   1. Audio Alert Configuration
-         Select a Chime: The extension allows you to select an .mp3 file to use as the chime for alerts. By default, it uses an included sound file, but you can upload your own audio file.
-         Supported format: .mp3 only
-      
-         Ensure your file is under 1 MB for optimal performance.
-      
-         How to upload:
-            Go to the extension settings.
-            Click on "Choose Chime".
-            Select the .mp3 file from your local directory.
-      
-   2. Debug Mode
-         Toggle this option to enable/disable debug mode. When debug mode is active, the console will output detailed logs about patient data changes, mutations in the DOM, and diagnostic checks.
-         This can help when troubleshooting or during development to ensure the extension is working as expected.
-         It also outputs errors, warnings, and detailed steps for each mutation observed in the patient list.
-      
-   4. Reset Patient Data
-         This option allows you to clear all stored patient data.
-         It will reset diagnostics counts and clear any cached information about time slots or patient data.
-         *Warning*: This action is irreversible once executed.
+1. **Start monitoring** — click the widget (bottom-right corner of VetRadar). It turns green when active.
+2. **Sound blocked?** — if the widget turns amber after a page navigation, click anywhere on the VetRadar tab to re-enable audio. The badge shows how many chimes were missed.
+3. **Stop monitoring** — click the green widget.
+4. **Configure sounds** — right-click the extension icon → **Options**, or go to `chrome://extensions` → Details → Extension options.
 
-   Usage Instructions
-   
-      Install the Extension: 
-         Follow the instructions in the "Installation" section.
-         
-      Monitor Patients:
-         Open your web application where the patient list is displayed.
-         The extension will automatically detect the "Patient List" and start monitoring for changes.
-         You will see the icon change to green when the extension is actively tracking.
-         
-      Configure Chime (Optional):
-         Go to the extension options.
-         Upload your own .mp3 sound file if you prefer a custom sound for alerts.
-         
-      Check Alerts:
-         Alerts are triggered when diagnostics numbers are updated in real-time.
-         The extension will play the selected sound if a diagnostic alert condition is met (e.g., a diagnostic number increases).
-         
-      Troubleshooting:
-         If the icon turns red, open the Chrome Developer Console (Ctrl + Shift + I or Cmd + Option + I on Mac) and check for error logs under the "Console" tab.
-         Use debug mode to output more verbose logs about the extension’s internal state.
-   Limitations
-      The extension only supports patient lists that use a structured DOM with consistent data-testid attributes for detecting patient cards and time slots.
-      Currently, only .mp3 files are supported for chime sounds. Other formats (like .wav or .ogg) will not work.
+## Options
+
+- **Master volume** — scales all channels simultaneously
+- **Per-channel controls** — enable/disable toggle, sound selection (6 built-in sounds), individual volume slider, drag-and-drop custom MP3
+- **Reset** button per channel restores that channel's default sound and volume
+- **Restore All Defaults** resets every channel at once
+
+## Sound Files (built-in)
+
+| File | Default use |
+|------|------------|
+| `BuddyIn.mp3` | Patient Added |
+| `Goodbye.mp3` | Patient Removed |
+| `3_tone_chime-99718.mp3` | New Task (Exam Room Notification) |
+| `mixkit-bell-notification-933.mp3` | Task Completed |
+| `simple-notification-152054.mp3` | — (selectable) |
+| `mixkit-doorbell-single-press-333.mp3` | — (selectable) |
+
+## Diagnostics
+
+Open Chrome DevTools on the VetRadar tab and run:
+
+```js
+// Status summary
+window.dispatchEvent(new CustomEvent('vr-mon-cmd', {detail:{cmd:'status'}}))
+
+// Last 50 log entries
+window.dispatchEvent(new CustomEvent('vr-mon-cmd', {detail:{cmd:'logs'}}))
+
+// Copy full diagnostic report to clipboard
+window.dispatchEvent(new CustomEvent('vr-mon-cmd', {detail:{cmd:'report'}}))
+```
+
+## Requirements
+
+- Google Chrome (or Chromium-based browser)
+- Active VetRadar account at `app.vetradar.com`
+- MP3 files must be under 1 MB for best performance if using custom audio
+
 ## Contributing
 
-If you wish to contribute, fork the repository and create a pull request with your changes. Make sure to document any modifications thoroughly.
-
-## Contact
-
-For any issues or support, please open an issue on GitHub or contact the repository owner.
+Fork the repository and open a pull request. Document any changes to the DOM selectors if VetRadar's front-end updates affect detection logic.
 
 ## License
 
-This project is licensed under the Apache License 2.0. See the [LICENSE](./LICENSE) file for more information.
+Apache License 2.0 — see [LICENSE](./LICENSE).

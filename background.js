@@ -2,7 +2,7 @@
 'use strict';
 
 function updateIcon(isActive) {
-    chrome.action.setIcon({ path: isActive ? 'icon48_on.png' : 'icon48_off.png' }, () => {
+    chrome.action.setIcon({ path: isActive ? 'graphic assets/icon48.png' : 'graphic assets/icon48.png' }, () => {
         void chrome.runtime.lastError;
     });
 }
