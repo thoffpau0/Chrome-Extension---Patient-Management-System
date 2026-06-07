@@ -206,10 +206,15 @@ function checkNotifications(card, name) {
     if (!p) return;
 
     const container = card.nextElementSibling?.children[0];
-    if (!container) return;
+    if (!container) {
+        log('WARN', 'Patient', 'No task container found', { name });
+        return;
+    }
 
     const { active, completed } = countTasks(container);
     const prev = p.taskCounts;
+
+    log('INFO', 'Patient', 'Task counts', { name, prev, now: { active, completed } });
 
     if (initialized && prev) {
         for (let k = prev.active; k < active; k++) {
