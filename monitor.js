@@ -122,7 +122,7 @@ function drainQueue() {
 
 // ─── Patient Tracking ─────────────────────────────────────────────────────────
 
-const patients = {};       // { [name]: { InExamRoom, taskCells[] } }
+const patients = {};       // { [name]: { InExamRoom, taskCounts:{active,completed}|null } }
 let prevNames  = new Set();
 
 function getPatientList() {
@@ -165,7 +165,7 @@ function findPatientInfo(card) {
 }
 
 function initPatient(name, inRoom) {
-    patients[name] = { InExamRoom: inRoom, taskCells: [] };
+    patients[name] = { InExamRoom: inRoom, taskCounts: null };
 }
 
 function hasGrandchild(node) {
@@ -179,45 +179,42 @@ function isCellCompleted(cell) {
     return cell.querySelector('svg[data-testid="SvgCheck"]') !== null;
 }
 
+// Count task-bearing cells, ignoring the Critical Notes column (always child 0).
+// Robust to column shifts and to the grid collapsing to 1 cell when a patient
+// has no tasks then expanding to the full column set when the first task lands.
+function countTasks(container) {
+    let active = 0, completed = 0;
+    Array.from(container.children).forEach((cell, i) => {
+        if (i === 0) return;              // Critical Notes column — not a task (handled separately later)
+        if (!hasGrandchild(cell)) return; // empty time/status cell
+        if (isCellCompleted(cell)) completed++;
+        else active++;
+    });
+    return { active, completed };
+}
+
 function checkNotifications(card, name) {
-    if (!patients[name]) return;
+    const p = patients[name];
+    if (!p) return;
 
     const container = card.nextElementSibling?.children[0];
     if (!container) return;
 
-    const cells = Array.from(container.children);
-    const prev  = patients[name].taskCells;
+    const { active, completed } = countTasks(container);
+    const prev = p.taskCounts;
 
-    if (prev.length > 0 && cells.length !== prev.length) {
-        patients[name].taskCells = cells.map(c => {
-            const hasTask = hasGrandchild(c);
-            return { hasTask, isCompleted: hasTask && isCellCompleted(c) };
-        });
-        log('INFO', 'Patient', 'Column count changed — resyncing', { name, from: prev.length, to: cells.length });
-        return;
+    if (initialized && prev) {
+        for (let k = prev.active; k < active; k++) {
+            playChime('examRoomNotification');
+            log('EVENT', 'Patient', 'Task added', { name, active });
+        }
+        for (let k = prev.completed; k < completed; k++) {
+            playChime('taskCompleted');
+            log('EVENT', 'Patient', 'Task completed', { name, completed });
+        }
     }
 
-    const next = [];
-
-    cells.forEach((cell, i) => {
-        const hasTask   = hasGrandchild(cell);
-        const completed = hasTask && isCellCompleted(cell);
-        const was       = prev[i] ?? { hasTask: false, isCompleted: false };
-
-        if (initialized) {
-            if (hasTask && !was.hasTask && !completed) {
-                playChime('examRoomNotification');
-                log('EVENT', 'Patient', 'Task added', { name, cell: i });
-            }
-            if (completed && !was.isCompleted) {
-                playChime('taskCompleted');
-                log('EVENT', 'Patient', 'Task completed', { name, cell: i });
-            }
-        }
-        next.push({ hasTask, isCompleted: completed });
-    });
-
-    patients[name].taskCells = next;
+    p.taskCounts = { active, completed };
 }
 
 function runUpdate() {
