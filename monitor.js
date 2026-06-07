@@ -121,6 +121,7 @@ function drainQueue() {
         if (err?.name === 'NotAllowedError') {
             audioPrimed = false;   // autoplay gate not unlocked — re-prime on next interaction
             log('WARN', 'Audio', `Autoplay blocked for ${type} — will play after next page interaction`);
+            if (isMonitoring) setWidgetState('muted');
         } else {
             log('ERROR', 'Audio', `play() failed for ${type}: ${err.message}`);
         }
@@ -214,7 +215,9 @@ function checkNotifications(card, name) {
     const { active, completed } = countTasks(container);
     const prev = p.taskCounts;
 
-    log('INFO', 'Patient', 'Task counts', { name, prev, now: { active, completed } });
+    if (!prev || prev.active !== active || prev.completed !== completed) {
+        log('INFO', 'Patient', 'Task counts changed', { name, prev, now: { active, completed } });
+    }
 
     if (initialized && prev) {
         for (let k = prev.active; k < active; k++) {
@@ -245,13 +248,13 @@ function runUpdate() {
 
     const current = new Set([...cardInfos.values()].map(i => i.name));
 
-    // If no patient could be identified (zero cards or all cards un-parseable)
-    // but we already know about patients, VetRadar is mid-remount — skip this
-    // cycle entirely. Without this guard a single null from findPatientInfo
-    // puts the patient in the removal loop and wipes their taskCounts, causing
-    // the next task event to be silently re-baselined instead of chiming.
-    if (current.size === 0 && prevNames.size > 0) {
-        log('INFO', 'Patient', 'No parseable patients — skipping (possible remount)');
+    // Never act on an empty scan. The list element can exist before its cards
+    // render (startup) or briefly during a VetRadar remount. Acting on zero
+    // patients would either flip the baseline (false "Added" for everyone on
+    // the next scan) or wipe taskCounts (missed task chimes). Skip entirely —
+    // initialized stays false until we actually see a patient.
+    if (current.size === 0) {
+        if (prevNames.size > 0) log('INFO', 'Patient', 'No parseable patients — skipping (possible remount)');
         return;
     }
 
@@ -302,8 +305,12 @@ function onMutation() {
 
         const n = Object.keys(patients).length;
         const w = document.getElementById('vr-monitor-widget');
-        if (w) w.title = `VetRadar Monitoring — Active\n${n} patient${n !== 1 ? 's' : ''} | update #${updateCount}`;
-        setWidgetState('active');
+        if (audioPrimed) {
+            if (w) w.title = `VetRadar Monitoring — Active\n${n} patient${n !== 1 ? 's' : ''} | update #${updateCount}`;
+            setWidgetState('active');
+        } else {
+            setWidgetState('muted');
+        }
     } catch (err) {
         errCount++;
         log('ERROR', 'Monitor', 'runUpdate threw', { message: err.message, stack: err.stack });
@@ -355,14 +362,24 @@ function stopObserver() {
 
 // Play every sound at volume 0 so Chrome's autoplay gate is unlocked before any
 // real event fires. Must be called from within a user-gesture handler to work.
+// audioPrimed flips to true only when a play() actually resolves, so the widget
+// state reflects whether sound will really work.
 let audioPrimed = false;
 function primeAudio() {
     if (audioPrimed) return;
-    audioPrimed = true;
     for (const a of Object.values(audioEl)) {
         const clone = a.cloneNode();
         clone.volume = 0;
-        clone.play().then(() => clone.pause()).catch(() => { audioPrimed = false; });
+        const p = clone.play();
+        if (!p) continue;
+        p.then(() => {
+            clone.pause();
+            if (!audioPrimed) {
+                audioPrimed = true;
+                log('INFO', 'Audio', 'Autoplay gate unlocked — sound enabled');
+                if (isMonitoring) setWidgetState('active');
+            }
+        }).catch(() => {});
     }
 }
 
@@ -393,7 +410,7 @@ function startMonitoring() {
     Object.keys(patients).forEach(k => delete patients[k]);
     prevNames = new Set();
     primeAudio();
-    setWidgetState('active');
+    setWidgetState(audioPrimed ? 'active' : 'muted');
     safeChrome(() => chrome.storage.local.set({ vrMonitoringActive: true }));
     log('INFO', 'Monitor', 'Monitoring started', { instance: INSTANCE_ID, by: callerLine() });
     startListWatcher();
@@ -422,10 +439,15 @@ const WIDGET_CSS = `
     }
     #vr-monitor-widget:hover { transform:scale(1.1); }
     #vr-monitor-widget.active { background-color:#15803d; }
+    #vr-monitor-widget.muted  { background-color:#d97706; animation:vr-pulse-amber 1.6s ease-in-out infinite; }
     #vr-monitor-widget.error  { background-color:#b91c1c; animation:vr-pulse 1.4s ease-in-out infinite; }
     @keyframes vr-pulse {
         0%,100% { box-shadow:0 2px 8px rgba(185,28,28,0.4); }
         50%      { box-shadow:0 0 18px 4px rgba(185,28,28,0.85); }
+    }
+    @keyframes vr-pulse-amber {
+        0%,100% { box-shadow:0 2px 8px rgba(217,119,6,0.4); }
+        50%      { box-shadow:0 0 18px 4px rgba(217,119,6,0.85); }
     }
 `;
 const ICON_OFF = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>`;
@@ -442,7 +464,9 @@ function injectWidget() {
     w.title = 'VetRadar Monitoring — click to start';
     document.body.appendChild(w);
     w.addEventListener('click', () => {
+        // pointerdown already fired primeAudio via the document listener.
         if (w.classList.contains('error') || !isMonitoring) startMonitoring();
+        else if (w.classList.contains('muted')) primeAudio();  // enable sound, keep monitoring
         else stopMonitoring();
     });
 }
@@ -450,10 +474,13 @@ function injectWidget() {
 function setWidgetState(state) {
     const w = document.getElementById('vr-monitor-widget');
     if (!w) return;
-    w.classList.remove('active', 'error');
+    w.classList.remove('active', 'error', 'muted');
     if (state === 'active') {
         w.classList.add('active'); w.innerHTML = ICON_ON;
         // tooltip is updated by onMutation with live patient count
+    } else if (state === 'muted') {
+        w.classList.add('muted'); w.innerHTML = ICON_OFF;
+        w.title = 'VetRadar Monitoring — ACTIVE, but sound is paused.\nClick anywhere on the page to enable sound.';
     } else if (state === 'error') {
         w.classList.add('error'); w.innerHTML = ICON_OFF;
         w.title = 'VetRadar Monitoring — error (click to retry)';
