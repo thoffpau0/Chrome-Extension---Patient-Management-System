@@ -368,6 +368,14 @@ let updateCount   = 0;
 let errCount      = 0;
 let lastUpdate    = null;
 const MAX_ERRORS  = 5;
+const INSTANCE_ID = Math.random().toString(36).slice(2, 7);
+
+// Returns the first stack frame outside this function — i.e. who called us.
+function callerLine() {
+    const stack = (new Error().stack || '').split('\n').map(s => s.trim());
+    // [0]='Error', [1]=callerLine, [2]=start/stopMonitoring, [3]=actual caller
+    return stack[3] || stack[2] || '?';
+}
 
 function startMonitoring() {
     if (!cfg.isActive) { log('WARN', 'Monitor', 'Start blocked — extension disabled via toolbar'); return; }
@@ -382,7 +390,7 @@ function startMonitoring() {
     primeAudio();
     setWidgetState('active');
     safeChrome(() => chrome.storage.local.set({ vrMonitoringActive: true }));
-    log('INFO', 'Monitor', 'Monitoring started');
+    log('INFO', 'Monitor', 'Monitoring started', { instance: INSTANCE_ID, by: callerLine() });
     startListWatcher();
 }
 
@@ -393,7 +401,7 @@ function stopMonitoring() {
     setWidgetState('inactive');
     reportStatus('inactive');
     safeChrome(() => chrome.storage.local.set({ vrMonitoringActive: false }));
-    log('INFO', 'Monitor', 'Monitoring stopped');
+    log('INFO', 'Monitor', 'Monitoring stopped', { instance: INSTANCE_ID, by: callerLine() });
 }
 
 // ─── Widget ───────────────────────────────────────────────────────────────────
@@ -561,6 +569,8 @@ function init() {
     // (audioPrimed reset to false) the next click re-primes.
     document.addEventListener('pointerdown', primeAudio, true);
     document.addEventListener('keydown', primeAudio, true);
+
+    log('INFO', 'Monitor', 'Content script loaded', { instance: INSTANCE_ID, frame: window === window.top ? 'top' : 'iframe', url: location.href });
 
     loadSettings((extensionEnabled, monitoringActive) => {
         if (!extensionEnabled) { setWidgetState('inactive'); return; }
