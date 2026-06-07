@@ -337,15 +337,16 @@ function stopObserver() {
 
 // ─── Monitor Control ──────────────────────────────────────────────────────────
 
-// Play every sound at volume 0 on the first user click so Chrome's autoplay
-// gate is unlocked before any real event fires. Without this, the first chime
-// after a hands-free monitoring reconnect fails with "no user gesture" even
-// though the user clicked the widget at startup.
+// Play every sound at volume 0 so Chrome's autoplay gate is unlocked before any
+// real event fires. Must be called from within a user-gesture handler to work.
+let audioPrimed = false;
 function primeAudio() {
+    if (audioPrimed) return;
+    audioPrimed = true;
     for (const a of Object.values(audioEl)) {
         const clone = a.cloneNode();
         clone.volume = 0;
-        clone.play().then(() => clone.pause()).catch(() => {});
+        clone.play().then(() => clone.pause()).catch(() => { audioPrimed = false; });
     }
 }
 
@@ -541,6 +542,18 @@ window.VR_Mon_App = {
 
 function init() {
     injectWidget();
+
+    // Unlock Chrome's autoplay gate on the first interaction anywhere on the
+    // page. Auto-resumed monitoring has no user gesture, so priming inside
+    // startMonitoring() alone isn't enough — the first click/keypress primes it.
+    const prime = () => {
+        primeAudio();
+        document.removeEventListener('pointerdown', prime, true);
+        document.removeEventListener('keydown', prime, true);
+    };
+    document.addEventListener('pointerdown', prime, true);
+    document.addEventListener('keydown', prime, true);
+
     loadSettings((extensionEnabled, monitoringActive) => {
         if (!extensionEnabled) { setWidgetState('inactive'); return; }
         if (monitoringActive) startMonitoring();
