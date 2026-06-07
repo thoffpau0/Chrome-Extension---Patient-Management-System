@@ -230,25 +230,28 @@ function runUpdate() {
     if (!list) { log('INFO', 'Patient', 'PatientList not in DOM'); return; }
 
     const cards     = Array.from(list.querySelectorAll('div[aria-label="Patient List Item"]'));
+    const cardInfos = new Map();
 
-    // If the list exists but has zero cards and we already know about patients,
-    // VetRadar is mid-remount — skip this update entirely to avoid false removals
-    // that would wipe taskCounts and cause missed chimes when cards reappear.
-    if (cards.length === 0 && prevNames.size > 0) {
-        log('INFO', 'Patient', 'No cards visible — skipping (possible remount)');
+    // Parse pass: resolve all patient names before touching any state.
+    for (const card of cards) {
+        const info = findPatientInfo(card);
+        if (info) cardInfos.set(card, info);
+    }
+
+    const current = new Set([...cardInfos.values()].map(i => i.name));
+
+    // If no patient could be identified (zero cards or all cards un-parseable)
+    // but we already know about patients, VetRadar is mid-remount — skip this
+    // cycle entirely. Without this guard a single null from findPatientInfo
+    // puts the patient in the removal loop and wipes their taskCounts, causing
+    // the next task event to be silently re-baselined instead of chiming.
+    if (current.size === 0 && prevNames.size > 0) {
+        log('INFO', 'Patient', 'No parseable patients — skipping (possible remount)');
         return;
     }
 
-    const current   = new Set();
-    const cardInfos = new Map();
-
-    for (const card of cards) {
-        const info = findPatientInfo(card);
-        if (!info) continue;
+    for (const [, info] of cardInfos) {
         const { name, InExamRoom } = info;
-        cardInfos.set(card, info);
-        current.add(name);
-
         if (patients[name]) {
             patients[name].InExamRoom = InExamRoom;
         } else {
