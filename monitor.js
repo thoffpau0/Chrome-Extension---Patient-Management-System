@@ -222,6 +222,15 @@ function runUpdate() {
     if (!list) { log('INFO', 'Patient', 'PatientList not in DOM'); return; }
 
     const cards     = Array.from(list.querySelectorAll('div[aria-label="Patient List Item"]'));
+
+    // If the list exists but has zero cards and we already know about patients,
+    // VetRadar is mid-remount — skip this update entirely to avoid false removals
+    // that would wipe taskCounts and cause missed chimes when cards reappear.
+    if (cards.length === 0 && prevNames.size > 0) {
+        log('INFO', 'Patient', 'No cards visible — skipping (possible remount)');
+        return;
+    }
+
     const current   = new Set();
     const cardInfos = new Map();
 
@@ -328,6 +337,18 @@ function stopObserver() {
 
 // ─── Monitor Control ──────────────────────────────────────────────────────────
 
+// Play every sound at volume 0 on the first user click so Chrome's autoplay
+// gate is unlocked before any real event fires. Without this, the first chime
+// after a hands-free monitoring reconnect fails with "no user gesture" even
+// though the user clicked the widget at startup.
+function primeAudio() {
+    for (const a of Object.values(audioEl)) {
+        const clone = a.cloneNode();
+        clone.volume = 0;
+        clone.play().then(() => clone.pause()).catch(() => {});
+    }
+}
+
 let isMonitoring  = false;
 let userActivated = false;
 let initialized   = false;
@@ -346,6 +367,7 @@ function startMonitoring() {
     lastUpdate    = null;
     Object.keys(patients).forEach(k => delete patients[k]);
     prevNames = new Set();
+    primeAudio();
     setWidgetState('active');
     safeChrome(() => chrome.storage.local.set({ vrMonitoringActive: true }));
     log('INFO', 'Monitor', 'Monitoring started');
