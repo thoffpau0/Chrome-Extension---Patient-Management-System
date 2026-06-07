@@ -88,10 +88,10 @@ function extURL(filename) {
 }
 
 function loadSounds(result) {
-    audioEl.patientAdded.src          = result.patientAddedFileData         || extURL(result.patientAddedFileName         || 'BuddyIn.mp3');
-    audioEl.patientRemoved.src        = result.patientRemovedFileData       || extURL(result.patientRemovedFileName       || 'Goodbye.mp3');
-    audioEl.examRoomNotification.src  = result.examRoomNotificationFileData || extURL(result.examRoomNotificationFileName || '3_tone_chime-99718.mp3');
-    audioEl.taskCompleted.src         = result.taskCompletedFileData        || extURL(result.taskCompletedFileName        || 'mixkit-bell-notification-933.mp3');
+    audioEl.patientAdded.src          = result.patientAddedFileData         || extURL(result.patientAddedFileName         || 'Audio/BuddyIn.mp3');
+    audioEl.patientRemoved.src        = result.patientRemovedFileData       || extURL(result.patientRemovedFileName       || 'Audio/Goodbye.mp3');
+    audioEl.examRoomNotification.src  = result.examRoomNotificationFileData || extURL(result.examRoomNotificationFileName || 'Audio/3_tone_chime-99718.mp3');
+    audioEl.taskCompleted.src         = result.taskCompletedFileData        || extURL(result.taskCompletedFileName        || 'Audio/mixkit-bell-notification-933.mp3');
     for (const a of Object.values(audioEl)) a.load();
 }
 

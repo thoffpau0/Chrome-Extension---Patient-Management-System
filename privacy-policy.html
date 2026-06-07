@@ -1,30 +1,66 @@
-Privacy Policy for VR Monitor
-Effective Date: 9/20/24
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy — Vet Radar Notification</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; color: #333; line-height: 1.6; }
+        h1 { color: #15803d; }
+        h2 { margin-top: 28px; }
+    </style>
+</head>
+<body>
 
-1. Introduction
-Welcome to VR Monitor. We are committed to protecting your privacy. This Privacy Policy outlines how we collect, use, disclose, and safeguard your information when you use our Chrome extension.
+<h1>Privacy Policy — Vet Radar Notification</h1>
+<p><strong>Effective Date:</strong> June 7, 2025 &nbsp;|&nbsp; <strong>Version:</strong> 1.5</p>
 
-2. Information We Collect
-Personal Data: Includes patient names, species, breed, medical conditions, appointment schedules, and other related information.
-Usage Data: Information on how you interact with the extension, such as features used and actions performed.
-3. How We Use Your Information
-To Manage Patient Data: Organize and display patient information efficiently.
-To Provide Notifications: Alert users about critical updates, missed appointments, and due tasks.
-To Improve the Extension: Analyze usage patterns to enhance features and performance.
-4. Data Storage and Security
-Storage: All data is stored locally using Chrome's storage.local API.
-Security Measures: We implement industry-standard security practices to protect your data from unauthorized access, alteration, disclosure, or destruction.
-5. Data Sharing and Disclosure
-Third-Party Services: We do not share your data with third parties.
-Legal Requirements: We may disclose your information if required by law or to protect our rights.
-6. User Rights
-You have the right to access, correct, or delete your personal data. To exercise these rights, please contact us at Thoffpau0@gmail.com.
+<h2>1. Introduction</h2>
+<p>Vet Radar Notification ("the Extension") is a Chrome extension that monitors the VetRadar patient board and plays audio alerts when patient or task events occur. This policy describes what data the Extension touches, how it is handled, and what is never collected.</p>
 
-7. Cookies and Tracking Technologies
-Our extension does not use cookies or similar tracking technologies.
+<h2>2. Data the Extension Reads</h2>
+<p>The Extension reads the VetRadar page DOM in real time to detect changes such as patients being added or removed and tasks being assigned or completed. This reading happens entirely within your browser. <strong>No patient data — including names, species, breed, medical conditions, or any clinical information — is ever stored, transmitted, or logged by the Extension.</strong> Data read from the DOM is held only in the JavaScript memory of the active tab and discarded when the page is navigated away or the tab is closed.</p>
 
-8. Changes to This Privacy Policy
-We may update our Privacy Policy from time to time. Any changes will be posted on this page with an updated effective date.
+<h2>3. Data the Extension Stores</h2>
+<p>The Extension stores only your personal settings using Chrome's <code>storage.local</code> API. This includes:</p>
+<ul>
+    <li>Sound selections and volume levels for each alert channel</li>
+    <li>Enable/disable toggles per channel</li>
+    <li>Master volume level</li>
+    <li>Custom audio file data (if you upload your own MP3), stored as a Base64 data URL</li>
+    <li>Whether monitoring was active when the extension was last used</li>
+</ul>
+<p>This data is stored locally on your device only. It is never transmitted to any server.</p>
 
-9. Contact Us
-If you have any questions or concerns about this Privacy Policy, please contact us at Thoffpau0@gmail.com.
+<h2>4. Data We Do Not Collect</h2>
+<ul>
+    <li>No patient names, medical records, or clinical data</li>
+    <li>No usage analytics or telemetry</li>
+    <li>No browsing history</li>
+    <li>No personally identifiable information</li>
+    <li>No cookies or tracking technologies</li>
+</ul>
+
+<h2>5. Third-Party Services</h2>
+<p>The Extension does not communicate with any external server or third-party service. All processing occurs locally within Chrome on your device.</p>
+
+<h2>6. Permissions Used</h2>
+<ul>
+    <li><strong>storage</strong> — to save your sound and volume preferences locally</li>
+    <li><strong>host_permissions (app.vetradar.com)</strong> — to inject the monitoring script into the VetRadar patient board page</li>
+</ul>
+
+<h2>7. Data Retention and Deletion</h2>
+<p>Settings are retained in <code>chrome.storage.local</code> until you uninstall the Extension or use the "Restore All Defaults" button in the Options page. Uninstalling the Extension removes all stored settings automatically.</p>
+
+<h2>8. User Rights</h2>
+<p>You can view, reset, or delete all Extension settings at any time via the Options page (<code>chrome://extensions</code> → Vet Radar Notification → Details → Extension options). No account or request to us is required.</p>
+
+<h2>9. Changes to This Policy</h2>
+<p>If this policy is updated, the new version will be posted in the Extension's GitHub repository and the effective date above will be revised.</p>
+
+<h2>10. Contact</h2>
+<p>For questions or concerns, contact: <a href="mailto:Thoffpau0@gmail.com">Thoffpau0@gmail.com</a></p>
+
+</body>
+</html>

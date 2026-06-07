@@ -6,25 +6,25 @@
 const SOUNDS = {
     examRoomNotification: {
         label:    'Exam Room Notification',
-        defaults: { enabled: true, fileName: '3_tone_chime-99718.mp3', fileData: null, volume: 0.5 },
+        defaults: { enabled: true, fileName: 'Audio/3_tone_chime-99718.mp3', fileData: null, volume: 0.5 },
         keys:     { enabled: 'enableExamRoomNotification', fileName: 'examRoomNotificationFileName',
                     fileData: 'examRoomNotificationFileData', volume: 'examRoomNotificationVolume' },
     },
     patientAdded: {
         label:    'Patient Added',
-        defaults: { enabled: true, fileName: 'BuddyIn.mp3', fileData: null, volume: 1.0 },
+        defaults: { enabled: true, fileName: 'Audio/BuddyIn.mp3', fileData: null, volume: 1.0 },
         keys:     { enabled: 'enablePatientAdded', fileName: 'patientAddedFileName',
                     fileData: 'patientAddedFileData', volume: 'patientAddedVolume' },
     },
     patientRemoved: {
         label:    'Patient Removed',
-        defaults: { enabled: true, fileName: 'Goodbye.mp3', fileData: null, volume: 1.0 },
+        defaults: { enabled: true, fileName: 'Audio/Goodbye.mp3', fileData: null, volume: 1.0 },
         keys:     { enabled: 'enablePatientRemoved', fileName: 'patientRemovedFileName',
                     fileData: 'patientRemovedFileData', volume: 'patientRemovedVolume' },
     },
     taskCompleted: {
         label:    'Task Completed',
-        defaults: { enabled: true, fileName: 'mixkit-bell-notification-933.mp3', fileData: null, volume: 1.0 },
+        defaults: { enabled: true, fileName: 'Audio/mixkit-bell-notification-933.mp3', fileData: null, volume: 1.0 },
         keys:     { enabled: 'enableTaskCompleted', fileName: 'taskCompletedFileName',
                     fileData: 'taskCompletedFileData', volume: 'taskCompletedVolume' },
     },

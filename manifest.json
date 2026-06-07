@@ -1,6 +1,6 @@
 {
   "name": "Vet Radar Notification",
-  "version": "1.4",
+  "version": "1.5",
   "manifest_version": 3,
   "background": {
     "service_worker": "background.js"
@@ -8,25 +8,29 @@
   "permissions": [
     "storage"
   ],
-    "icons": {
-    "48": "icon48_on.png",
-    "128": "icon128.png"
+  "icons": {
+    "16": "graphic assets/icon16.png",
+    "32": "graphic assets/icon32.png",
+    "48": "graphic assets/icon48.png",
+    "128": "graphic assets/icon128.png"
   },
   "action": {
     "default_icon": {
-  	"48": "icon48_on.png"
+      "16": "graphic assets/icon16.png",
+      "32": "graphic assets/icon32.png",
+      "48": "graphic assets/icon48.png"
     },
     "default_title": "Vet Radar Extension"
   },
   "web_accessible_resources": [
     {
       "resources": [
-        "3_tone_chime-99718.mp3",
-        "simple-notification-152054.mp3",
-        "mixkit-doorbell-single-press-333.mp3",
-        "mixkit-bell-notification-933.mp3",
-        "BuddyIn.mp3",
-        "Goodbye.mp3"
+        "Audio/3_tone_chime-99718.mp3",
+        "Audio/simple-notification-152054.mp3",
+        "Audio/mixkit-doorbell-single-press-333.mp3",
+        "Audio/mixkit-bell-notification-933.mp3",
+        "Audio/BuddyIn.mp3",
+        "Audio/Goodbye.mp3"
       ],
       "matches": ["https://app.vetradar.com/*"]
     }
