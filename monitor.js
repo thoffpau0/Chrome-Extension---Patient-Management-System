@@ -405,13 +405,6 @@ function updateBadge() {
 }
 const INSTANCE_ID = Math.random().toString(36).slice(2, 7);
 
-// Returns the first stack frame outside this function — i.e. who called us.
-function callerLine() {
-    const stack = (new Error().stack || '').split('\n').map(s => s.trim());
-    // [0]='Error', [1]=callerLine, [2]=start/stopMonitoring, [3]=actual caller
-    return stack[3] || stack[2] || '?';
-}
-
 function startMonitoring() {
     if (!cfg.isActive) { log('WARN', 'Monitor', 'Start blocked — extension disabled via toolbar'); return; }
     isMonitoring  = true;
@@ -427,7 +420,7 @@ function startMonitoring() {
     setWidgetState(audioPrimed ? 'active' : 'muted');
     updateBadge();
     safeChrome(() => chrome.storage.local.set({ vrMonitoringActive: true }));
-    log('INFO', 'Monitor', 'Monitoring started', { instance: INSTANCE_ID, by: callerLine() });
+    log('INFO', 'Monitor', 'Monitoring started', { instance: INSTANCE_ID });
     startListWatcher();
 }
 
@@ -440,7 +433,7 @@ function stopMonitoring() {
     updateBadge();
     reportStatus('inactive');
     safeChrome(() => chrome.storage.local.set({ vrMonitoringActive: false }));
-    log('INFO', 'Monitor', 'Monitoring stopped', { instance: INSTANCE_ID, by: callerLine() });
+    log('INFO', 'Monitor', 'Monitoring stopped', { instance: INSTANCE_ID });
 }
 
 // ─── Widget ───────────────────────────────────────────────────────────────────
@@ -489,7 +482,6 @@ function injectWidget() {
     w.title = 'VetRadar Monitoring — click to start';
     document.body.appendChild(w);
     w.addEventListener('click', () => {
-        // pointerdown already fired primeAudio via the document listener.
         if (w.classList.contains('error') || !isMonitoring) startMonitoring();
         else if (w.classList.contains('muted')) primeAudio();  // enable sound, keep monitoring
         else stopMonitoring();
