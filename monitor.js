@@ -120,8 +120,9 @@ function drainQueue() {
     clone.play().catch(err => {
         if (err?.name === 'NotAllowedError') {
             audioPrimed = false;   // autoplay gate not unlocked — re-prime on next interaction
-            log('WARN', 'Audio', `Autoplay blocked for ${type} — will play after next page interaction`);
-            if (isMonitoring) setWidgetState('muted');
+            mutedChimeCount++;
+            log('WARN', 'Audio', `Autoplay blocked for ${type} — will play after next page interaction (${mutedChimeCount} missed)`);
+            if (isMonitoring) { setWidgetState('muted'); updateBadge(); }
         } else {
             log('ERROR', 'Audio', `play() failed for ${type}: ${err.message}`);
         }
@@ -376,20 +377,32 @@ function primeAudio() {
             clone.pause();
             if (!audioPrimed) {
                 audioPrimed = true;
+                mutedChimeCount = 0;
                 log('INFO', 'Audio', 'Autoplay gate unlocked — sound enabled');
-                if (isMonitoring) setWidgetState('active');
+                if (isMonitoring) { setWidgetState('active'); updateBadge(); }
             }
         }).catch(() => {});
     }
 }
 
-let isMonitoring  = false;
-let userActivated = false;
-let initialized   = false;
-let updateCount   = 0;
-let errCount      = 0;
-let lastUpdate    = null;
-const MAX_ERRORS  = 5;
+let isMonitoring    = false;
+let userActivated   = false;
+let initialized     = false;
+let updateCount     = 0;
+let errCount        = 0;
+let lastUpdate      = null;
+let mutedChimeCount = 0;
+const MAX_ERRORS    = 5;
+
+function updateBadge() {
+    const w = document.getElementById('vr-monitor-widget');
+    if (!w) return;
+    if (mutedChimeCount > 0) {
+        w.dataset.badge = mutedChimeCount > 9 ? '9+' : String(mutedChimeCount);
+    } else {
+        delete w.dataset.badge;
+    }
+}
 const INSTANCE_ID = Math.random().toString(36).slice(2, 7);
 
 // Returns the first stack frame outside this function — i.e. who called us.
@@ -409,8 +422,10 @@ function startMonitoring() {
     lastUpdate    = null;
     Object.keys(patients).forEach(k => delete patients[k]);
     prevNames = new Set();
+    mutedChimeCount = 0;
     primeAudio();
     setWidgetState(audioPrimed ? 'active' : 'muted');
+    updateBadge();
     safeChrome(() => chrome.storage.local.set({ vrMonitoringActive: true }));
     log('INFO', 'Monitor', 'Monitoring started', { instance: INSTANCE_ID, by: callerLine() });
     startListWatcher();
@@ -420,7 +435,9 @@ function stopMonitoring() {
     isMonitoring = false;
     stopObserver();
     audioQueue.length = 0;
+    mutedChimeCount = 0;
     setWidgetState('inactive');
+    updateBadge();
     reportStatus('inactive');
     safeChrome(() => chrome.storage.local.set({ vrMonitoringActive: false }));
     log('INFO', 'Monitor', 'Monitoring stopped', { instance: INSTANCE_ID, by: callerLine() });
@@ -435,7 +452,7 @@ const WIDGET_CSS = `
         z-index:2147483647; display:flex; align-items:center; justify-content:center;
         box-shadow:0 2px 8px rgba(0,0,0,0.35);
         transition:background-color 0.25s ease, transform 0.1s ease;
-        background-color:#b91c1c; user-select:none;
+        background-color:#b91c1c; user-select:none; overflow:visible;
     }
     #vr-monitor-widget:hover { transform:scale(1.1); }
     #vr-monitor-widget.active { background-color:#15803d; }
@@ -448,6 +465,14 @@ const WIDGET_CSS = `
     @keyframes vr-pulse-amber {
         0%,100% { box-shadow:0 2px 8px rgba(217,119,6,0.4); }
         50%      { box-shadow:0 0 18px 4px rgba(217,119,6,0.85); }
+    }
+    #vr-monitor-widget[data-badge]::after {
+        content: attr(data-badge);
+        position:absolute; top:-6px; right:-6px;
+        min-width:18px; height:18px; padding:0 4px;
+        border-radius:9px; background:#ef4444; color:#fff;
+        font-size:10px; font-weight:bold; line-height:18px; text-align:center;
+        border:2px solid #fff; box-sizing:border-box; pointer-events:none;
     }
 `;
 const ICON_OFF = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>`;
