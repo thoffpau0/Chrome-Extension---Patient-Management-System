@@ -117,7 +117,15 @@ function drainQueue() {
     const advance = () => { if (!advanced) { advanced = true; drainQueue(); } };
     clone.onended = advance;
     clone.onerror = () => { log('ERROR', 'Audio', `Playback error for ${type}`); advance(); };
-    clone.play().catch(err => { log('ERROR', 'Audio', `play() failed for ${type}`, { error: err.message }); advance(); });
+    clone.play().catch(err => {
+        if (err?.name === 'NotAllowedError') {
+            audioPrimed = false;   // autoplay gate not unlocked — re-prime on next interaction
+            log('WARN', 'Audio', `Autoplay blocked for ${type} — will play after next page interaction`);
+        } else {
+            log('ERROR', 'Audio', `play() failed for ${type}: ${err.message}`);
+        }
+        advance();
+    });
 }
 
 // ─── Patient Tracking ─────────────────────────────────────────────────────────
@@ -543,16 +551,13 @@ window.VR_Mon_App = {
 function init() {
     injectWidget();
 
-    // Unlock Chrome's autoplay gate on the first interaction anywhere on the
-    // page. Auto-resumed monitoring has no user gesture, so priming inside
-    // startMonitoring() alone isn't enough — the first click/keypress primes it.
-    const prime = () => {
-        primeAudio();
-        document.removeEventListener('pointerdown', prime, true);
-        document.removeEventListener('keydown', prime, true);
-    };
-    document.addEventListener('pointerdown', prime, true);
-    document.addEventListener('keydown', prime, true);
+    // Unlock Chrome's autoplay gate on user interaction anywhere on the page.
+    // Auto-resumed monitoring has no user gesture, so priming inside
+    // startMonitoring() alone isn't enough. Listeners stay attached and
+    // primeAudio() is a no-op once primed, so if a chime is ever blocked again
+    // (audioPrimed reset to false) the next click re-primes.
+    document.addEventListener('pointerdown', primeAudio, true);
+    document.addEventListener('keydown', primeAudio, true);
 
     loadSettings((extensionEnabled, monitoringActive) => {
         if (!extensionEnabled) { setWidgetState('inactive'); return; }
