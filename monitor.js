@@ -87,11 +87,16 @@ function extURL(filename) {
     catch { log('ERROR', 'Audio', 'Extension context invalidated — cannot resolve URL'); return ''; }
 }
 
+// Migrate flat filenames saved before the Audio/ subfolder was introduced.
+const AUDIO_FILES = new Set(['BuddyIn.mp3','Goodbye.mp3','3_tone_chime-99718.mp3',
+    'mixkit-bell-notification-933.mp3','simple-notification-152054.mp3','mixkit-doorbell-single-press-333.mp3']);
+function normPath(f) { return f && !f.startsWith('Audio/') && !f.startsWith('data:') && AUDIO_FILES.has(f) ? 'Audio/' + f : f; }
+
 function loadSounds(result) {
-    audioEl.patientAdded.src          = result.patientAddedFileData         || extURL(result.patientAddedFileName         || 'Audio/BuddyIn.mp3');
-    audioEl.patientRemoved.src        = result.patientRemovedFileData       || extURL(result.patientRemovedFileName       || 'Audio/Goodbye.mp3');
-    audioEl.examRoomNotification.src  = result.examRoomNotificationFileData || extURL(result.examRoomNotificationFileName || 'Audio/3_tone_chime-99718.mp3');
-    audioEl.taskCompleted.src         = result.taskCompletedFileData        || extURL(result.taskCompletedFileName        || 'Audio/mixkit-bell-notification-933.mp3');
+    audioEl.patientAdded.src          = result.patientAddedFileData         || extURL(normPath(result.patientAddedFileName)         || 'Audio/BuddyIn.mp3');
+    audioEl.patientRemoved.src        = result.patientRemovedFileData       || extURL(normPath(result.patientRemovedFileName)       || 'Audio/Goodbye.mp3');
+    audioEl.examRoomNotification.src  = result.examRoomNotificationFileData || extURL(normPath(result.examRoomNotificationFileName) || 'Audio/3_tone_chime-99718.mp3');
+    audioEl.taskCompleted.src         = result.taskCompletedFileData        || extURL(normPath(result.taskCompletedFileName)        || 'Audio/mixkit-bell-notification-933.mp3');
     for (const a of Object.values(audioEl)) a.load();
 }
 
