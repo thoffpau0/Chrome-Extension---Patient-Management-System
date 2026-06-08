@@ -255,22 +255,16 @@ function runUpdate() {
     const current = new Set([...cardInfos.values()].map(i => i.name));
 
     if (current.size === 0) {
-        // Zero parseable patients — could be: (a) genuine discharge, (b) remount
-        // with cards briefly absent, or (c) remount with cards present but names
-        // not yet rendered. Schedule a confirmation re-check after 1.5s. If names
-        // are still unparseable or absent then, it's a real discharge.
-        if (prevNames.size > 0 && !emptyBoardTimer) {
-            log('INFO', 'Patient', 'No parseable patients — confirming in 1.5s...');
+        if (cards.length === 0 && prevNames.size > 0 && !emptyBoardTimer) {
+            // No card elements at all — could be a genuine empty board or a
+            // brief remount zero-state. Confirm after 1.2s: if still empty, fire removals.
+            log('INFO', 'Patient', 'Board appears empty — confirming...');
             emptyBoardTimer = setTimeout(() => {
                 emptyBoardTimer = null;
                 const pl = getPatientList();
                 if (!pl) return;
-                const fresh = new Map();
-                for (const c of Array.from(pl.querySelectorAll('div[aria-label="Patient List Item"]'))) {
-                    const info = findPatientInfo(c);
-                    if (info) fresh.set(c, info);
-                }
-                if (fresh.size === 0 && prevNames.size > 0) {
+                const still = pl.querySelector('div[aria-label="Patient List Item"]');
+                if (!still && prevNames.size > 0) {
                     for (const name of [...prevNames]) {
                         delete patients[name];
                         playChime('patientRemoved');
@@ -278,11 +272,15 @@ function runUpdate() {
                     }
                     prevNames = new Set();
                 }
-            }, 1500);
+            }, 1200);
+        } else if (cards.length > 0) {
+            // Cards exist but names unparseable — React mid-render, skip cleanly.
+            if (emptyBoardTimer) { clearTimeout(emptyBoardTimer); emptyBoardTimer = null; }
+            if (prevNames.size > 0) log('INFO', 'Patient', 'No parseable patients — skipping (remount)');
         }
         return;
     }
-    // Parseable patients present — cancel any pending removal confirmation.
+    // Parseable patients present — cancel any pending empty-board removal.
     if (emptyBoardTimer) { clearTimeout(emptyBoardTimer); emptyBoardTimer = null; }
 
     for (const [, info] of cardInfos) {
