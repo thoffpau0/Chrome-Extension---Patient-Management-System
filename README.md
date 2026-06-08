@@ -93,6 +93,17 @@ window.dispatchEvent(new CustomEvent('vr-mon-cmd', {detail:{cmd:'report'}}))
 
 Fork the repository and open a pull request. Document any changes to the DOM selectors if VetRadar's front-end updates affect detection logic.
 
+## Changelog
+
+### 1.6
+- Fixed: patient-removed chime now fires reliably when the last patient leaves the board (1.5s confirmation timer distinguishes a real discharge from a transient VetRadar DOM remount).
+- Fixed: alert sounds resolve correctly after the `Audio/` folder reorganization — old saved settings auto-migrate to the new paths, no settings reset required.
+
+### 1.5
+- Added Task Completed alert and reorganized files into `Audio/` and `graphic assets/` folders.
+- New green bell branding, amber "sound paused" widget state, and a missed-chime badge counter.
+- Count-based task detection, DOM-remount safety, and an audio queue hardening pass.
+
 ## License
 
 Apache License 2.0 — see [LICENSE](./LICENSE).
