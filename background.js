@@ -1,8 +1,8 @@
 // background.js — Service worker: icon, badge, extension toggle
 'use strict';
 
-function updateIcon(isActive) {
-    chrome.action.setIcon({ path: isActive ? 'graphic assets/icon48.png' : 'graphic assets/icon48.png' }, () => {
+function updateIcon() {
+    chrome.action.setIcon({ path: 'graphic assets/icon48.png' }, () => {
         void chrome.runtime.lastError;
     });
 }
@@ -23,7 +23,7 @@ function setStatusBadge(status) {
 function toggleExtension() {
     chrome.storage.local.get('isActive', result => {
         const next = result.isActive !== false ? false : true;
-        chrome.storage.local.set({ isActive: next }, () => updateIcon(next));
+        chrome.storage.local.set({ isActive: next }, () => updateIcon());
     });
 }
 
@@ -41,14 +41,14 @@ chrome.runtime.onInstalled.addListener(() => {
     chrome.storage.local.get(['isActive', 'debug', 'monitorStatus'], result => {
         if (result.isActive === undefined) chrome.storage.local.set({ isActive: true });
         if (result.debug === undefined)    chrome.storage.local.set({ debug: false });
-        updateIcon(result.isActive !== false);
+        updateIcon();
         if (result.monitorStatus) setStatusBadge(result.monitorStatus);
     });
 });
 
 chrome.runtime.onStartup.addListener(() => {
     chrome.storage.local.get(['isActive', 'monitorStatus'], result => {
-        updateIcon(result.isActive !== false);
+        updateIcon();
         if (result.monitorStatus) setStatusBadge(result.monitorStatus);
     });
 });
